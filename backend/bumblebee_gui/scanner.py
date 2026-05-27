@@ -63,9 +63,10 @@ def parse_ndjson_output(output: str) -> tuple[List[dict], List[dict]]:
             continue
         try:
             record = json.loads(line)
-            if record.get("type") == "finding":
+            record_type = record.get("record_type", "")
+            if record_type == "finding":
                 findings.append(record)
-            else:
+            elif record_type == "package":
                 packages.append(record)
         except json.JSONDecodeError:
             continue
@@ -130,13 +131,13 @@ async def get_scan_packages(scan_id: int, ndjson_path: str) -> List[PackageRecor
             continue
         try:
             record = json.loads(line)
-            if record.get("type") != "finding":
+            if record.get("record_type") == "package":
                 packages.append(
                     PackageRecord(
-                        name=record.get("name", "unknown"),
+                        name=record.get("package_name", "unknown"),
                         ecosystem=record.get("ecosystem", "unknown"),
                         version=record.get("version", "unknown"),
-                        source=record.get("source", "unknown"),
+                        source=record.get("source_type", "unknown"),
                     )
                 )
         except json.JSONDecodeError:
@@ -157,10 +158,10 @@ async def get_scan_findings(scan_id: int, ndjson_path: str) -> List[FindingRecor
             continue
         try:
             record = json.loads(line)
-            if record.get("type") == "finding":
+            if record.get("record_type") == "finding":
                 findings.append(
                     FindingRecord(
-                        package=record.get("package", "unknown"),
+                        package=record.get("package_name", "unknown"),
                         version=record.get("version", "unknown"),
                         ecosystem=record.get("ecosystem", "unknown"),
                         severity=record.get("severity", "info"),
