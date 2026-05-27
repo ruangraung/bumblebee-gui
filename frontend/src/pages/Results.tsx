@@ -337,7 +337,7 @@ export default function Results() {
       {/* ── Summary chart ── */}
       {activeScan?.summary?.ecosystem_counts && Object.keys(activeScan.summary.ecosystem_counts).length > 0 && (
         <div className="rounded-lg border border-border p-4">
-          <EcosystemChart ecosystemCounts={activeScan.summary.ecosystem_counts} />
+          <EcosystemChart data={activeScan.summary.ecosystem_counts} />
         </div>
       )}
     </div>

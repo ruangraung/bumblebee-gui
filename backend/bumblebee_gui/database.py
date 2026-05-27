@@ -1,4 +1,5 @@
 import aiosqlite
+import json
 import os
 from pathlib import Path
 from datetime import datetime
@@ -51,7 +52,7 @@ async def insert_scan(
                 summary.total_packages if summary else None,
                 summary.ecosystems_found if summary else None,
                 summary.findings_count if summary else None,
-                str(summary.ecosystem_counts) if summary else None,
+                json.dumps(summary.ecosystem_counts) if summary else None,
                 ndjson_path,
             ),
         )
@@ -81,7 +82,7 @@ async def update_scan_status(
                     summary.total_packages,
                     summary.ecosystems_found,
                     summary.findings_count,
-                    str(summary.ecosystem_counts),
+                    json.dumps(summary.ecosystem_counts),
                     ndjson_path,
                     scan_id,
                 ),
@@ -112,7 +113,7 @@ async def get_scans(limit: int = 20) -> List[ScanRecord]:
                     total_packages=row["total_packages"] or 0,
                     ecosystems_found=row["ecosystems_found"] or 0,
                     findings_count=row["findings_count"] or 0,
-                    ecosystem_counts=eval(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
+                    ecosystem_counts=json.loads(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
                 )
                 if row["total_packages"] is not None
                 else None,
@@ -139,7 +140,7 @@ async def get_scan(scan_id: int) -> Optional[ScanRecord]:
                 total_packages=row["total_packages"] or 0,
                 ecosystems_found=row["ecosystems_found"] or 0,
                 findings_count=row["findings_count"] or 0,
-                ecosystem_counts=eval(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
+                ecosystem_counts=json.loads(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
             )
             if row["total_packages"] is not None
             else None,
