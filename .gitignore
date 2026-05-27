@@ -45,6 +45,18 @@ backend/bin/*.tar.gz
 .env
 .env.local
 .env.*.local
+.env.production
+
+# Git credentials (security)
+.git-credentials
+.git-credentials.*
+
+# Docker volumes
+db-data/
+scan-data/
+
+# Bumblebee GUI data (user-specific)
+.bumblebee-gui/
 
 # Build outputs
 frontend/dist/
