@@ -19,7 +19,7 @@ interface ScanState {
   fetchScan: (id: number) => Promise<void>
   fetchPackages: (id: number) => Promise<void>
   fetchFindings: (id: number) => Promise<void>
-  createScan: (request: ScanRequest) => Promise<void>
+  createScan: (request: ScanRequest) => Promise<ScanRecord>
   deleteScan: (id: number) => Promise<void>
   clearError: () => void
 }
@@ -77,8 +77,10 @@ export const useScanStore = create<ScanState>((set, get) => ({
     try {
       const scan = await api.createScan(request)
       set({ scans: [scan, ...get().scans], loading: false })
+      return scan
     } catch (err) {
       set({ error: (err as Error).message, loading: false })
+      throw err
     }
   },
 
