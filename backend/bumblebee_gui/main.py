@@ -2,6 +2,7 @@ import csv
 import io
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,7 +44,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -121,6 +122,13 @@ async def get_scan_detail(scan_id: int):
 @app.delete("/api/scans/{scan_id}")
 async def delete_scan_record(scan_id: int):
     """Delete a scan by ID."""
+    # Fetch scan first to get ndjson_path for cleanup
+    scan = await get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
+    # Clean up NDJSON file on disk
+    if scan.ndjson_path:
+        Path(scan.ndjson_path).unlink(missing_ok=True)
     deleted = await delete_scan(scan_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
