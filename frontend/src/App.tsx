@@ -15,6 +15,7 @@ function App() {
         <Route path="/results" element={<Results />} />
         <Route path="/results/:scanId" element={<Results />} />
         <Route path="/findings" element={<Findings />} />
+        <Route path="/findings/:scanId" element={<Findings />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>
