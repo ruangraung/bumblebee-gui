@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bumblebee-gui"
+version = "0.1.0"
+description = "Web GUI for Bumblebee supply chain security scanner"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [
+    { name = "Bumblebee GUI Contributors" },
+]
+keywords = ["security", "supply-chain", "scanner", "gui", "web"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.scripts]
+bumblebee-gui = "bumblebee_gui.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/user/bumblebee-gui"
+Repository = "https://github.com/user/bumblebee-gui"
+Issues = "https://github.com/user/bumblebee-gui/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/bumblebee_gui"]
