@@ -1,0 +1,27 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend:/app
+      - bumblebee-data:/root/.bumblebee-gui
+    environment:
+      - BUMBLEBEE_DATA_DIR=/root/.bumblebee-gui
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+volumes:
+  bumblebee-data:
