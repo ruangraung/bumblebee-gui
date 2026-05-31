@@ -61,7 +61,7 @@ export default function Results() {
     // Fuzzy search by name
     if (search.trim()) {
       const q = search.toLowerCase()
-      result = result.filter((p) => p.package_name.toLowerCase().includes(q))
+      result = result.filter((p) => p.name.toLowerCase().includes(q))
     }
 
     // Ecosystem filter
@@ -73,13 +73,13 @@ export default function Results() {
     result.sort((a, b) => {
       switch (sortKey) {
         case 'name-asc':
-          return a.package_name.localeCompare(b.package_name)
+          return a.name.localeCompare(b.name)
         case 'name-desc':
-          return b.package_name.localeCompare(a.package_name)
+          return b.name.localeCompare(a.name)
         case 'ecosystem':
-          return a.ecosystem.localeCompare(b.ecosystem) || a.package_name.localeCompare(b.package_name)
+          return a.ecosystem.localeCompare(b.ecosystem) || a.name.localeCompare(b.name)
         case 'version':
-          return a.version.localeCompare(b.version) || a.package_name.localeCompare(b.package_name)
+          return a.version.localeCompare(b.version) || a.name.localeCompare(b.name)
         default:
           return 0
       }
@@ -128,9 +128,9 @@ export default function Results() {
   }, [filtered, activeScan])
 
   const exportCSV = useCallback(() => {
-    const header = 'package_name,ecosystem,version,source_type'
+    const header = 'package_name,ecosystem,version,source_type,project_path,confidence'
     const rows = filtered.map((p) =>
-      [escapeCSV(p.package_name), escapeCSV(p.ecosystem), escapeCSV(p.version), escapeCSV(p.source_type ?? '')].join(',')
+      [escapeCSV(p.name), escapeCSV(p.ecosystem), escapeCSV(p.version), escapeCSV(p.source_type ?? ''), escapeCSV(p.project_path ?? ''), escapeCSV(p.confidence ?? '')].join(',')
     )
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -143,7 +143,7 @@ export default function Results() {
   }, [filtered, activeScan])
 
   const copyToClipboard = useCallback(async () => {
-    const text = filtered.map((p) => `${p.package_name}\t${p.ecosystem}\t${p.version}\t${p.source_type ?? ''}`).join('\n')
+    const text = filtered.map((p) => `${p.name}\t${p.ecosystem}\t${p.version}\t${p.source_type ?? ''}\t${p.project_path ?? ''}\t${p.confidence ?? ''}`).join('\n')
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -250,7 +250,9 @@ export default function Results() {
                 <th className="px-4 py-3 text-left font-medium">Package</th>
                 <th className="px-4 py-3 text-left font-medium">Ecosystem</th>
                 <th className="px-4 py-3 text-left font-medium">Version</th>
-                <th className="px-4 py-3 text-left font-medium">Source</th>
+                <th className="px-4 py-3 text-left font-medium">Source Type</th>
+                <th className="px-4 py-3 text-left font-medium">Project Path</th>
+                <th className="px-4 py-3 text-left font-medium">Confidence</th>
               </tr>
             </thead>
             <tbody>
@@ -259,7 +261,7 @@ export default function Results() {
                   key={`${pkg.package_name}-${pkg.version}-${i}`}
                   className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                 >
-                  <td className="px-4 py-2.5 font-medium">{pkg.package_name}</td>
+                  <td className="px-4 py-2.5 font-medium">{pkg.name}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ecosystemColor(pkg.ecosystem)}`}>
                       {pkg.ecosystem}
@@ -267,6 +269,8 @@ export default function Results() {
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs">{pkg.version}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{pkg.source_type ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{pkg.project_path ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{pkg.confidence ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
