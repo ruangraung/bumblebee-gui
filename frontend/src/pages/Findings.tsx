@@ -170,7 +170,8 @@ export default function Findings() {
           f.package_name.toLowerCase().includes(q) ||
           f.catalog_id?.toLowerCase().includes(q) ||
           f.catalog_name?.toLowerCase().includes(q) ||
-          f.evidence?.toLowerCase().includes(q)
+          f.evidence?.toLowerCase().includes(q) ||
+          f.source_file?.toLowerCase().includes(q)
       )
     }
 
@@ -199,7 +200,7 @@ export default function Findings() {
   }, [filtered, activeScan])
 
   const exportCSV = useCallback(() => {
-    const header = 'package_name,version,ecosystem,severity,catalog_id,catalog_name,evidence'
+    const header = 'package_name,version,ecosystem,severity,catalog_id,catalog_name,evidence,source_file'
     const rows = filtered.map((f) =>
       [
         escapeCSV(f.package_name),
@@ -209,6 +210,7 @@ export default function Findings() {
         escapeCSV(f.catalog_id ?? ''),
         escapeCSV(f.catalog_name ?? ''),
         escapeCSV(f.evidence ?? ''),
+        escapeCSV(f.source_file ?? ''),
       ].join(',')
     )
     const csv = [header, ...rows].join('\n')
@@ -381,6 +383,11 @@ export default function Findings() {
                 {finding.evidence && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Evidence: {finding.evidence}
+                  </p>
+                )}
+                {finding.source_file && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Source: {finding.source_file}
                   </p>
                 )}
               </div>
