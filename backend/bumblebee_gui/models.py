@@ -43,7 +43,7 @@ class ScanRecord(BaseModel):
 
 
 class PackageRecord(BaseModel):
-    name: str
+    package_name: str
     ecosystem: str
     version: str
     source_type: Optional[str] = None
@@ -55,7 +55,7 @@ class PackageRecord(BaseModel):
 
 
 class FindingRecord(BaseModel):
-    package: str
+    package_name: str
     version: str
     ecosystem: str
     severity: str
