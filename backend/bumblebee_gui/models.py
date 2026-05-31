@@ -46,7 +46,12 @@ class PackageRecord(BaseModel):
     name: str
     ecosystem: str
     version: str
-    source: str
+    source_type: Optional[str] = None
+    source_file: Optional[str] = None
+    project_path: Optional[str] = None
+    package_manager: Optional[str] = None
+    confidence: Optional[str] = None
+    has_lifecycle_scripts: Optional[bool] = None
 
 
 class FindingRecord(BaseModel):
@@ -54,6 +59,11 @@ class FindingRecord(BaseModel):
     version: str
     ecosystem: str
     severity: str
-    cve: Optional[str] = None
-    description: str
-    found_in: str
+    catalog_id: str
+    catalog_name: str
+    evidence: str
+    source_file: Optional[str] = None
+    source_type: Optional[str] = None
+    root_kind: Optional[str] = None
+    project_path: Optional[str] = None
+    confidence: Optional[str] = None
