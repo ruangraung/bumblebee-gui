@@ -31,7 +31,7 @@ const PRESETS: Preset[] = [
     label: 'Project',
     description: 'Scan current project dependencies',
     profile: 'project',
-    ecosystems: ['npm', 'pypi', 'go', 'cargo'],
+    ecosystems: ['npm', 'pypi', 'go', 'rubygems'],
     roots: ['.'],
   },
   {
@@ -45,20 +45,14 @@ const PRESETS: Preset[] = [
     label: 'Deep',
     description: 'Comprehensive scan of all ecosystems',
     profile: 'deep',
-    ecosystems: ['npm', 'pypi', 'go', 'cargo', 'maven', 'nuget', 'rubygems', 'cocoapods'],
+    ecosystems: ['npm', 'pypi', 'go', 'rubygems', 'packagist', 'mcp', 'editor-extension', 'browser-extension'],
     roots: [],
   },
 ]
 
 const ALL_ECOSYSTEMS = [
-  'npm',
-  'pypi',
-  'go',
-  'cargo',
-  'maven',
-  'nuget',
-  'rubygems',
-  'cocoapods',
+  'npm', 'pypi', 'go', 'rubygems', 'packagist',
+  'mcp', 'editor-extension', 'browser-extension',
 ]
 
 // ---------------------------------------------------------------------------
