@@ -61,7 +61,7 @@ export default function Results() {
     // Fuzzy search by name
     if (search.trim()) {
       const q = search.toLowerCase()
-      result = result.filter((p) => p.name.toLowerCase().includes(q))
+      result = result.filter((p) => p.package_name.toLowerCase().includes(q))
     }
 
     // Ecosystem filter
@@ -73,13 +73,13 @@ export default function Results() {
     result.sort((a, b) => {
       switch (sortKey) {
         case 'name-asc':
-          return a.name.localeCompare(b.name)
+          return a.package_name.localeCompare(b.package_name)
         case 'name-desc':
-          return b.name.localeCompare(a.name)
+          return b.package_name.localeCompare(a.package_name)
         case 'ecosystem':
-          return a.ecosystem.localeCompare(b.ecosystem) || a.name.localeCompare(b.name)
+          return a.ecosystem.localeCompare(b.ecosystem) || a.package_name.localeCompare(b.package_name)
         case 'version':
-          return a.version.localeCompare(b.version) || a.name.localeCompare(b.name)
+          return a.version.localeCompare(b.version) || a.package_name.localeCompare(b.package_name)
         default:
           return 0
       }
@@ -128,9 +128,9 @@ export default function Results() {
   }, [filtered, activeScan])
 
   const exportCSV = useCallback(() => {
-    const header = 'name,ecosystem,version,source'
+    const header = 'package_name,ecosystem,version,source_type'
     const rows = filtered.map((p) =>
-      [escapeCSV(p.name), escapeCSV(p.ecosystem), escapeCSV(p.version), escapeCSV(p.source)].join(',')
+      [escapeCSV(p.package_name), escapeCSV(p.ecosystem), escapeCSV(p.version), escapeCSV(p.source_type ?? '')].join(',')
     )
     const csv = [header, ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -143,7 +143,7 @@ export default function Results() {
   }, [filtered, activeScan])
 
   const copyToClipboard = useCallback(async () => {
-    const text = filtered.map((p) => `${p.name}\t${p.ecosystem}\t${p.version}\t${p.source}`).join('\n')
+    const text = filtered.map((p) => `${p.package_name}\t${p.ecosystem}\t${p.version}\t${p.source_type ?? ''}`).join('\n')
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -256,17 +256,17 @@ export default function Results() {
             <tbody>
               {paged.map((pkg, i) => (
                 <tr
-                  key={`${pkg.name}-${pkg.version}-${i}`}
+                  key={`${pkg.package_name}-${pkg.version}-${i}`}
                   className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
                 >
-                  <td className="px-4 py-2.5 font-medium">{pkg.name}</td>
+                  <td className="px-4 py-2.5 font-medium">{pkg.package_name}</td>
                   <td className="px-4 py-2.5">
                     <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ecosystemColor(pkg.ecosystem)}`}>
                       {pkg.ecosystem}
                     </span>
                   </td>
                   <td className="px-4 py-2.5 font-mono text-xs">{pkg.version}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{pkg.source}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{pkg.source_type ?? '—'}</td>
                 </tr>
               ))}
             </tbody>

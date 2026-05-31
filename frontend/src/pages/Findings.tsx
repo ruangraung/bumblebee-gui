@@ -167,10 +167,10 @@ export default function Findings() {
       const q = searchQuery.toLowerCase()
       result = result.filter(
         (f) =>
-          f.package.toLowerCase().includes(q) ||
-          f.cve?.toLowerCase().includes(q) ||
-          f.description.toLowerCase().includes(q) ||
-          f.found_in.toLowerCase().includes(q)
+          f.package_name.toLowerCase().includes(q) ||
+          f.catalog_id?.toLowerCase().includes(q) ||
+          f.catalog_name?.toLowerCase().includes(q) ||
+          f.evidence?.toLowerCase().includes(q)
       )
     }
 
@@ -199,16 +199,16 @@ export default function Findings() {
   }, [filtered, activeScan])
 
   const exportCSV = useCallback(() => {
-    const header = 'package,version,ecosystem,severity,cve,description,found_in'
+    const header = 'package_name,version,ecosystem,severity,catalog_id,catalog_name,evidence'
     const rows = filtered.map((f) =>
       [
-        escapeCSV(f.package),
+        escapeCSV(f.package_name),
         escapeCSV(f.version),
         escapeCSV(f.ecosystem),
         escapeCSV(f.severity),
-        escapeCSV(f.cve ?? ''),
-        escapeCSV(f.description),
-        escapeCSV(f.found_in),
+        escapeCSV(f.catalog_id ?? ''),
+        escapeCSV(f.catalog_name ?? ''),
+        escapeCSV(f.evidence ?? ''),
       ].join(',')
     )
     const csv = [header, ...rows].join('\n')
@@ -352,7 +352,7 @@ export default function Findings() {
 
             return (
               <div
-                key={`${finding.package}-${finding.version}-${finding.cve}-${i}`}
+                key={`${finding.package_name}-${finding.version}-${finding.catalog_id}-${i}`}
                 className={`rounded-lg border border-border bg-card p-4 border-l-4 ${borderColor}`}
               >
                 {/* Severity badge + package header */}
@@ -363,7 +363,7 @@ export default function Findings() {
                     {meta.label}
                   </span>
                   <span className="font-semibold text-sm">
-                    {finding.package} {finding.version}
+                    {finding.package_name} {finding.version}
                   </span>
                   <span
                     className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ecosystemColor(finding.ecosystem)}`}
@@ -372,22 +372,15 @@ export default function Findings() {
                   </span>
                 </div>
 
-                {/* CVE + description */}
-                {finding.cve && (
+                {/* Catalog info + evidence */}
+                {finding.catalog_id && (
                   <p className="text-sm font-medium text-foreground mb-1">
-                    {finding.cve} — {finding.description}
+                    {finding.catalog_id} — {finding.catalog_name}
                   </p>
                 )}
-                {!finding.cve && finding.description && (
-                  <p className="text-sm text-foreground mb-1">
-                    {finding.description}
-                  </p>
-                )}
-
-                {/* Found in */}
-                {finding.found_in && (
+                {finding.evidence && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Found in: {finding.found_in}
+                    Evidence: {finding.evidence}
                   </p>
                 )}
               </div>
