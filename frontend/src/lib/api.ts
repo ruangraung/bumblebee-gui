@@ -27,7 +27,12 @@ export interface PackageRecord {
   name: string
   ecosystem: string
   version: string
-  source: string
+  source_type?: string
+  source_file?: string
+  project_path?: string
+  package_manager?: string
+  confidence?: string
+  has_lifecycle_scripts?: boolean
 }
 
 export interface FindingRecord {
@@ -35,9 +40,14 @@ export interface FindingRecord {
   version: string
   ecosystem: string
   severity: string
-  cve?: string
-  description: string
-  found_in: string
+  catalog_id: string
+  catalog_name: string
+  evidence: string
+  source_file?: string
+  source_type?: string
+  root_kind?: string
+  project_path?: string
+  confidence?: string
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
