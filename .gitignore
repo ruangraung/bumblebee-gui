@@ -76,6 +76,7 @@ coverage.xml
 
 # mypy
 .mypy_cache/
+.codegraph/
 
 # Internal planning docs (do not publish)
 docs/plans/

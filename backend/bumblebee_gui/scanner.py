@@ -134,10 +134,15 @@ async def get_scan_packages(scan_id: int, ndjson_path: str) -> List[PackageRecor
             if record.get("record_type") == "package":
                 packages.append(
                     PackageRecord(
-                        name=record.get("package_name", "unknown"),
+                        package_name=record.get("package_name", "unknown"),
                         ecosystem=record.get("ecosystem", "unknown"),
                         version=record.get("version", "unknown"),
-                        source=record.get("source_type", "unknown"),
+                        source_type=record.get("source_type"),
+                        source_file=record.get("source_file"),
+                        project_path=record.get("project_path"),
+                        package_manager=record.get("package_manager"),
+                        confidence=record.get("confidence"),
+                        has_lifecycle_scripts=record.get("has_lifecycle_scripts"),
                     )
                 )
         except json.JSONDecodeError:
@@ -161,13 +166,18 @@ async def get_scan_findings(scan_id: int, ndjson_path: str) -> List[FindingRecor
             if record.get("record_type") == "finding":
                 findings.append(
                     FindingRecord(
-                        package=record.get("package_name", "unknown"),
+                        package_name=record.get("package_name", "unknown"),
                         version=record.get("version", "unknown"),
                         ecosystem=record.get("ecosystem", "unknown"),
                         severity=record.get("severity", "info"),
-                        cve=record.get("cve"),
-                        description=record.get("description", ""),
-                        found_in=record.get("found_in", "unknown"),
+                        catalog_id=record.get("catalog_id", ""),
+                        catalog_name=record.get("catalog_name", ""),
+                        evidence=record.get("evidence", ""),
+                        source_file=record.get("source_file"),
+                        source_type=record.get("source_type"),
+                        root_kind=record.get("root_kind"),
+                        project_path=record.get("project_path"),
+                        confidence=record.get("confidence"),
                     )
                 )
         except json.JSONDecodeError:
