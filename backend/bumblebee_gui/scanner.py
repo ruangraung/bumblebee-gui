@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -49,7 +49,7 @@ def build_command(request: ScanRequest) -> List[str]:
 
 def generate_ndjson_path(profile: ScanProfile) -> Path:
     """Generate a unique NDJSON file path for a scan."""
-    timestamp = datetime.utcnow().strftime("%Y-%m-%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
     return SCANS_DIR / f"{timestamp}_{profile.value}.ndjson"
 
 
