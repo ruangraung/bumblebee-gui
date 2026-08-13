@@ -100,3 +100,13 @@ def test_scan_endpoints_404_for_unknown_scan(client):
     assert client.get("/api/scans/9999").status_code == 404
     assert client.get("/api/scans/9999/packages").status_code == 404
     assert client.get("/api/scans/9999/findings").status_code == 404
+
+
+def test_cors_allows_only_local_dev_origins(client):
+    # The dev frontend (Vite on :5173) is the only allowed origin.
+    allowed = client.get("/api/health", headers={"Origin": "http://localhost:5173"})
+    assert allowed.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    # Any other origin must not get CORS headers — guards against re-widening to "*".
+    blocked = client.get("/api/health", headers={"Origin": "http://evil.example.com"})
+    assert "access-control-allow-origin" not in blocked.headers
