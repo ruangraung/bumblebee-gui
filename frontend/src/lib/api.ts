@@ -24,7 +24,7 @@ export interface ScanRecord {
 }
 
 export interface PackageRecord {
-  name: string
+  package_name: string
   ecosystem: string
   version: string
   source_type?: string
@@ -36,7 +36,7 @@ export interface PackageRecord {
 }
 
 export interface FindingRecord {
-  package: string
+  package_name: string
   version: string
   ecosystem: string
   severity: string
