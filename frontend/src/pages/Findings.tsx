@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Download, Search } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { Button } from '@/components/ui/button'
-import { FindingRecord } from '@/lib/api'
 
 // ── Severity config ──
 

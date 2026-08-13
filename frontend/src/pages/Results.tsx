@@ -4,7 +4,6 @@ import { Download, Copy, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
-import { api, PackageRecord } from '@/lib/api'
 
 const PAGE_SIZE = 50
 
