@@ -17,6 +17,7 @@ interface ScanState {
 
   fetchScans: () => Promise<void>
   fetchScan: (id: number) => Promise<void>
+  waitForScan: (id: number, intervalMs?: number) => Promise<ScanRecord>
   fetchPackages: (id: number) => Promise<void>
   fetchFindings: (id: number) => Promise<void>
   createScan: (request: ScanRequest) => Promise<ScanRecord>
@@ -50,6 +51,28 @@ export const useScanStore = create<ScanState>((set, get) => ({
     } catch (err) {
       set({ error: (err as Error).message, loading: false })
     }
+  },
+
+  waitForScan: async (id: number, intervalMs = 2000) => {
+    // Poll until the scan reaches a terminal state (completed/failed).
+    // Caps at ~30 minutes to avoid polling forever on a wedged backend.
+    for (let attempt = 0; attempt < 900; attempt += 1) {
+      try {
+        const scan = await api.getScan(id)
+        set({
+          currentScan: scan,
+          scans: get().scans.map((s) => (s.id === id ? scan : s)),
+        })
+        if (scan.status === 'completed' || scan.status === 'failed') {
+          return scan
+        }
+      } catch (err) {
+        set({ error: (err as Error).message })
+        throw err
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+    throw new Error(`Scan ${id} did not complete within 30 minutes`)
   },
 
   fetchPackages: async (id: number) => {

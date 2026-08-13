@@ -120,9 +120,9 @@ export default function Findings() {
     fetchScans()
   }, [fetchScans])
 
-  // Fetch findings once we have an active scan
+  // Fetch findings once the scan has completed (running scans have no data file yet)
   useEffect(() => {
-    if (activeScan) {
+    if (activeScan && activeScan.status === 'completed') {
       fetchFindings(activeScan.id)
     }
   }, [activeScan, fetchFindings])
