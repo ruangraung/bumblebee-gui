@@ -19,12 +19,19 @@ interface Preset {
   roots: string[]
 }
 
+const ALL_ECOSYSTEMS = [
+  'npm', 'pypi', 'go', 'rubygems', 'packagist',
+  'mcp', 'editor-extension', 'browser-extension',
+]
+
+const DEFAULT_ECOSYSTEMS = ['npm', 'pypi']
+
 const PRESETS: Preset[] = [
   {
     label: 'Baseline',
     description: 'Quick scan of common ecosystems',
     profile: 'baseline',
-    ecosystems: ['npm', 'pypi'],
+    ecosystems: [...DEFAULT_ECOSYSTEMS],
     roots: [],
   },
   {
@@ -45,14 +52,9 @@ const PRESETS: Preset[] = [
     label: 'Deep',
     description: 'Comprehensive scan of all ecosystems',
     profile: 'deep',
-    ecosystems: ['npm', 'pypi', 'go', 'rubygems', 'packagist', 'mcp', 'editor-extension', 'browser-extension'],
+    ecosystems: [...ALL_ECOSYSTEMS],
     roots: [],
   },
-]
-
-const ALL_ECOSYSTEMS = [
-  'npm', 'pypi', 'go', 'rubygems', 'packagist',
-  'mcp', 'editor-extension', 'browser-extension',
 ]
 
 // ---------------------------------------------------------------------------
@@ -99,7 +101,7 @@ export default function Scan() {
 
   // ---- Form state --------------------------------------------------------
   const [profile, setProfile] = useState<Profile>('baseline')
-  const [ecosystems, setEcosystems] = useState<string[]>(['npm', 'pypi'])
+  const [ecosystems, setEcosystems] = useState<string[]>(DEFAULT_ECOSYSTEMS)
   const [roots, setRoots] = useState<string[]>([])
   const [newRoot, setNewRoot] = useState('')
   const [exposureCatalog, setExposureCatalog] = useState('')
