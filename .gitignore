@@ -43,9 +43,8 @@ backend/bin/*.tar.gz
 
 # Environment
 .env
-.env.local
-.env.*.local
-.env.production
+.env.*
+!.env.example
 
 # Git credentials (security)
 .git-credentials
