@@ -40,6 +40,9 @@ class ScanRecord(BaseModel):
     status: ScanStatus
     summary: Optional[ScanSummary] = None
     ndjson_path: Optional[str] = None
+    # Live progress: packages discovered so far while running; final total when
+    # completed. Computed on read — not stored in the database.
+    packages_found: Optional[int] = None
 
 
 class PackageRecord(BaseModel):

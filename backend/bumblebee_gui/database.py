@@ -154,3 +154,18 @@ async def delete_scan(scan_id: int) -> bool:
         cursor = await db.execute("DELETE FROM scans WHERE id = ?", (scan_id,))
         await db.commit()
         return cursor.rowcount > 0
+
+
+async def fail_stale_running_scans():
+    """Mark scans stuck in 'running' as failed.
+
+    A backend restart mid-scan orphans the background task (the task registry
+    lives in memory only), which would otherwise leave rows permanently
+    'running'. Runs on startup, before the API serves requests.
+    """
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE scans SET status = ? WHERE status = ?",
+            (ScanStatus.failed.value, ScanStatus.running.value),
+        )
+        await db.commit()
