@@ -1,0 +1,102 @@
+# CI — supply-chain + secret + dependency-audit + build gates.
+#
+# Runs on push to main/refactor/v2 and every pull request.
+#
+# Layered security model:
+#   - Socket (supply-chain + SAST)  -> malicious-package / code-level gate
+#   - gitleaks (committed secrets)  -> credential-leak gate
+#   - npm audit + pip-audit (CVEs)  -> known-vulnerability gates
+#   - build (tsc + vite)            -> compile gate
+#
+# Note: `npm ci` here runs PLAIN npm (no Socket alias). Socket runs as a
+# separate scan step, so the package manager is never wrapped — the aliasing
+# approach previously caused process re-invocation / OOM. Docker at deploy
+# time is an additional runtime blast-radius layer, NOT a substitute for
+# these pre-execution gates.
+
+name: CI
+
+on:
+  push:
+    branches: [main, refactor/v2]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  supply-chain:
+    name: Socket supply-chain scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Socket Security
+        uses: SocketDev/socket-basics@v2.0.3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          socket_security_api_key: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+
+  secret-scan:
+    name: Gitleaks secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend:
+    name: Backend audit + install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+      - name: pip-audit (CVE gate)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt
+
+  frontend:
+    name: Frontend audit + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install (locked)
+        run: npm ci
+      - name: npm audit (advisory, non-blocking)
+        # TODO(upgrade): react-router-dom 6.30.4 -> 7.x and vite 5 -> 8.x are
+        # MAJOR migrations, not bumps. Until they land, these advisories report
+        # but do not block. Low real risk for this client-side SPA:
+        #   - react-router open-redirect (moderate)
+        #   - react-router constructor-injection (HIGH, but SSR-only; app has no SSR)
+        #   - esbuild dev-server request-forwarding (moderate; dev-only, not in builds)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+      - name: Type-check + build
+        run: npm run build
