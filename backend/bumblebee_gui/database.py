@@ -2,7 +2,7 @@ import aiosqlite
 import json
 import os
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from .models import ScanRecord, ScanProfile, ScanStatus, ScanSummary
@@ -46,7 +46,7 @@ async def insert_scan(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 profile.value,
                 status.value,
                 summary.total_packages if summary else None,
