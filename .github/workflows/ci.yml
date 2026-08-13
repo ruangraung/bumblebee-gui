@@ -89,14 +89,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install (locked)
         run: npm ci
-      - name: npm audit (advisory, non-blocking)
-        # TODO(upgrade): react-router-dom 6.30.4 -> 7.x and vite 5 -> 8.x are
-        # MAJOR migrations, not bumps. Until they land, these advisories report
-        # but do not block. Low real risk for this client-side SPA:
-        #   - react-router open-redirect (moderate)
-        #   - react-router constructor-injection (HIGH, but SSR-only; app has no SSR)
-        #   - esbuild dev-server request-forwarding (moderate; dev-only, not in builds)
+      - name: npm audit (CVE gate)
         run: npm audit --audit-level=high
-        continue-on-error: true
       - name: Type-check + build
         run: npm run build
