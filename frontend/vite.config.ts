@@ -37,6 +37,9 @@ export default defineConfig({
   server: {
     port: 5173,
     host: "0.0.0.0",
+    // Allow access via the tailnet hostname (tailscale serve → ts.net) —
+    // Vite's DNS-rebinding protection blocks non-localhost hosts by default.
+    allowedHosts: [".ts.net"],
     proxy: {
       "/api": {
         target: "http://backend:8000",
