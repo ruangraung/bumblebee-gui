@@ -89,12 +89,22 @@ def calculate_summary(packages: List[dict], findings: List[dict]) -> ScanSummary
     )
 
 
-async def run_scan(request: ScanRequest) -> tuple[ScanSummary, Path]:
-    """Execute a Bumblebee scan and return results."""
+async def run_scan(
+    request: ScanRequest, ndjson_path: Optional[Path] = None
+) -> tuple[ScanSummary, Path]:
+    """Execute a Bumblebee scan, streaming NDJSON output to disk as it arrives.
+
+    Unlike a buffered ``communicate()``-style run, each line is written to the
+    output file the moment the CLI produces it. That makes live progress
+    observable (see ``count_packages``) and keeps partial output when a scan
+    fails or is cancelled. On cancellation the CLI subprocess is killed so a
+    cancelled scan never keeps scanning in the background.
+    """
     ensure_dirs()
 
     cmd = build_command(request)
-    ndjson_path = generate_ndjson_path(request.profile)
+    if ndjson_path is None:
+        ndjson_path = generate_ndjson_path(request.profile)
 
     # Run Bumblebee as subprocess
     process = await asyncio.create_subprocess_exec(
@@ -102,21 +112,61 @@ async def run_scan(request: ScanRequest) -> tuple[ScanSummary, Path]:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
+    if process.stdout is None or process.stderr is None:
+        # Cannot happen with PIPE above — guards the type checker only.
+        raise RuntimeError("Failed to capture subprocess output")
 
-    stdout, stderr = await process.communicate()
+    # Drain stderr concurrently so a chatty CLI can't deadlock the stream.
+    stderr_task = asyncio.create_task(process.stderr.read())
+
+    try:
+        with open(ndjson_path, "wb") as out:
+            async for raw in process.stdout:
+                out.write(raw)
+        await process.wait()
+        stderr = await stderr_task
+    except asyncio.CancelledError:
+        # Cancellation (user aborted the scan): kill the CLI, reap it, and
+        # release the stderr reader before propagating.
+        process.kill()
+        await process.wait()
+        if not stderr_task.done():
+            stderr_task.cancel()
+            try:
+                await stderr_task
+            except asyncio.CancelledError:
+                pass
+        raise
 
     if process.returncode != 0:
         error_msg = stderr.decode().strip()
         raise RuntimeError(f"Bumblebee scan failed: {error_msg}")
 
-    # Save raw output
-    ndjson_path.write_bytes(stdout)
-
-    # Parse and summarize
-    packages, findings = parse_ndjson_output(stdout.decode())
+    # Parse and summarize from the streamed file (the on-disk source of truth).
+    packages, findings = parse_ndjson_output(ndjson_path.read_text())
     summary = calculate_summary(packages, findings)
 
     return summary, ndjson_path
+
+
+def count_packages(path: Path) -> int:
+    """Count package records currently in an NDJSON file (live scan progress).
+
+    Cheap enough to call on every poll: scans are a few MB at most.
+    """
+    if not path.exists():
+        return 0
+    count = 0
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                if json.loads(line).get("record_type") == "package":
+                    count += 1
+            except json.JSONDecodeError:
+                continue
+    return count
 
 
 async def get_scan_packages(scan_id: int, ndjson_path: str) -> List[PackageRecord]:

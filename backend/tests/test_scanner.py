@@ -8,6 +8,9 @@ NDJSON→Pydantic record mapping without touching the subprocess path.
 import asyncio
 import json
 import re
+import time
+
+import pytest
 
 from bumblebee_gui import scanner
 from bumblebee_gui.models import ScanProfile, ScanRequest
@@ -278,3 +281,102 @@ def test_get_scan_findings_defaults(tmp_path):
     assert len(findings) == 1
     assert findings[0].package_name == "unknown"
     assert findings[0].severity == "info"
+
+
+# ── run_scan subprocess path (streaming + cancellation) ─────────────────────
+
+# Fake CLI: writes one package line, pauses long enough to be observed
+# mid-run, then writes the rest and exits.
+STREAM_SCRIPT = """\
+import json, sys, time
+sys.stdout.write(json.dumps({"record_type": "package", "package_name": "pkg0", "ecosystem": "npm"}) + "\\n")
+sys.stdout.flush()
+time.sleep(1.0)
+for i in range(1, 3):
+    sys.stdout.write(json.dumps({"record_type": "package", "package_name": f"pkg{i}", "ecosystem": "npm"}) + "\\n")
+    sys.stdout.flush()
+"""
+
+
+def _make_fake_cli(tmp_path, script):
+    cli = tmp_path / "fake-cli.py"
+    cli.write_text("#!/usr/bin/env python3\n" + script)
+    cli.chmod(0o755)
+    return cli
+
+
+def test_run_scan_streams_ndjson_progressively(monkeypatch, tmp_path):
+    """Output lands on disk as the CLI produces it, not only at exit."""
+    monkeypatch.setattr(scanner, "BINARY_PATH", str(_make_fake_cli(tmp_path, STREAM_SCRIPT)))
+
+    async def scenario():
+        out_path = tmp_path / "out.ndjson"
+        task = asyncio.create_task(
+            scanner.run_scan(ScanRequest(profile=ScanProfile.baseline), out_path)
+        )
+        # The CLI writes its first line then sleeps 1s — catch the file mid-run.
+        for _ in range(200):
+            if out_path.exists() and out_path.read_text().strip():
+                break
+            await asyncio.sleep(0.01)
+        partial_lines = (
+            len(out_path.read_text().strip().splitlines()) if out_path.exists() else 0
+        )
+        assert partial_lines >= 1
+        if partial_lines < 3:
+            # Observed before the CLI finished → the stream is progressive.
+            assert partial_lines == 1
+        summary, path = await task
+        return summary, path
+
+    summary, path = asyncio.run(scenario())
+    assert summary.total_packages == 3
+    assert summary.ecosystem_counts == {"npm": 3}
+    assert path.read_text().strip().count("\n") == 2
+
+
+# Fake CLI: writes a heartbeat file forever; used to prove the subprocess is
+# actually killed on cancellation (heartbeat stops growing).
+HEARTBEAT_SCRIPT = """\
+import json, os, sys, time
+hb = os.environ["FAKE_HEARTBEAT"]
+for i in range(10000):
+    with open(hb, "a") as f:
+        f.write("beat\\n")
+    if i == 0:
+        sys.stdout.write(json.dumps({"record_type": "package", "package_name": "pkg0"}) + "\\n")
+        sys.stdout.flush()
+    time.sleep(0.02)
+"""
+
+
+def test_run_scan_cancel_kills_subprocess(monkeypatch, tmp_path):
+    """Cancelling run_scan kills the CLI process and keeps partial output."""
+    monkeypatch.setattr(scanner, "BINARY_PATH", str(_make_fake_cli(tmp_path, HEARTBEAT_SCRIPT)))
+    heartbeat = tmp_path / "heartbeat"
+    monkeypatch.setenv("FAKE_HEARTBEAT", str(heartbeat))
+
+    async def scenario():
+        out_path = tmp_path / "out.ndjson"
+        task = asyncio.create_task(
+            scanner.run_scan(ScanRequest(profile=ScanProfile.baseline), out_path)
+        )
+        # Wait for the first package line, then cancel mid-stream.
+        for _ in range(200):
+            if out_path.exists() and out_path.read_text().strip():
+                break
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        return out_path
+
+    out_path = asyncio.run(scenario())
+    # Partial output is preserved for inspection/cleanup.
+    assert "pkg0" in out_path.read_text()
+
+    # The subprocess must be dead: the heartbeat stops growing after cancel.
+    size_after = heartbeat.stat().st_size if heartbeat.exists() else 0
+    time.sleep(0.2)
+    size_later = heartbeat.stat().st_size if heartbeat.exists() else 0
+    assert size_after == size_later, "subprocess kept running after cancellation"

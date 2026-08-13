@@ -14,10 +14,12 @@ interface ScanState {
   findings: FindingRecord[]
   loading: boolean
   error: string | null
+  /** Scan ids the user has cancelled; in-flight pollers stop quietly for these. */
+  cancelledScanIds: number[]
 
   fetchScans: () => Promise<void>
   fetchScan: (id: number) => Promise<void>
-  waitForScan: (id: number, intervalMs?: number) => Promise<ScanRecord>
+  waitForScan: (id: number, intervalMs?: number) => Promise<ScanRecord | null>
   fetchPackages: (id: number) => Promise<void>
   fetchFindings: (id: number) => Promise<void>
   createScan: (request: ScanRequest) => Promise<ScanRecord>
@@ -32,6 +34,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
   findings: [],
   loading: false,
   error: null,
+  cancelledScanIds: [],
 
   fetchScans: async () => {
     set({ loading: true, error: null })
@@ -57,6 +60,10 @@ export const useScanStore = create<ScanState>((set, get) => ({
     // Poll until the scan reaches a terminal state (completed/failed).
     // Caps at ~30 minutes to avoid polling forever on a wedged backend.
     for (let attempt = 0; attempt < 900; attempt += 1) {
+      if (get().cancelledScanIds.includes(id)) {
+        // The user cancelled this scan — stop polling quietly.
+        return null
+      }
       try {
         const scan = await api.getScan(id)
         set({
@@ -67,6 +74,10 @@ export const useScanStore = create<ScanState>((set, get) => ({
           return scan
         }
       } catch (err) {
+        if (get().cancelledScanIds.includes(id)) {
+          // The scan was deleted (cancelled) between polls — not an error.
+          return null
+        }
         set({ error: (err as Error).message })
         throw err
       }
@@ -114,6 +125,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
       set({
         scans: get().scans.filter((s) => s.id !== id),
         currentScan: get().currentScan?.id === id ? null : get().currentScan,
+        cancelledScanIds: [...get().cancelledScanIds, id],
         loading: false,
       })
     } catch (err) {

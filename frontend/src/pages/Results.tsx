@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
-import { Download, Copy, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Download, Copy, Search, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
@@ -11,6 +11,7 @@ type SortKey = 'name-asc' | 'name-desc' | 'ecosystem' | 'version'
 
 export default function Results() {
   const { scanId } = useParams<{ scanId?: string }>()
+  const navigate = useNavigate()
   const {
     scans,
     packages,
@@ -19,6 +20,7 @@ export default function Results() {
     fetchScans,
     fetchPackages,
     waitForScan,
+    deleteScan,
     clearError,
   } = useScanStore()
 
@@ -132,6 +134,14 @@ export default function Results() {
     }
     return pages
   }, [totalPages, page])
+
+  // Cancel the running scan: the backend cancels the task, kills the CLI and
+  // removes the record + partial file; we head back to the dashboard.
+  const handleCancel = useCallback(async () => {
+    if (!activeScan) return
+    await deleteScan(activeScan.id)
+    navigate('/')
+  }, [activeScan, deleteScan, navigate])
 
   // ── Export helpers ──
 
@@ -267,6 +277,15 @@ export default function Results() {
             Scan is running — this can take a few minutes for deep scans. Results will
             appear automatically.
           </p>
+          {typeof activeScan.packages_found === 'number' && activeScan.packages_found > 0 && (
+            <p className="text-sm text-muted-foreground mt-2">
+              {activeScan.packages_found.toLocaleString()} packages found so far
+            </p>
+          )}
+          <Button variant="destructive" size="sm" className="mt-6" onClick={handleCancel}>
+            <X className="mr-1.5 h-4 w-4" />
+            Cancel scan
+          </Button>
         </div>
       ) : activeScan.status === 'failed' ? (
         <EmptyState message="This scan failed. Check the backend logs and try again." />

@@ -21,6 +21,8 @@ export interface ScanRecord {
   status: 'pending' | 'running' | 'completed' | 'failed'
   summary?: ScanSummary
   ndjson_path?: string
+  /** Live progress while running (packages discovered so far); final total when completed. */
+  packages_found?: number
 }
 
 export interface PackageRecord {
