@@ -12,13 +12,22 @@ Bumblebee is a powerful CLI tool for scanning local filesystems for package meta
 - 📥 Export data as JSON/CSV
 - 🌙 Dark/light theme support
 
+## Project Status
+
+Actively developed (as of August 2026):
+
+- **Background scan execution** — scans no longer block the browser. `POST /api/scans` returns immediately (`202`); the scan runs server-side and the UI polls for status until completion.
+- **Modern frontend stack** — migrated to **Vite 8 (Rolldown engine)** + **react-router 7**; zero known dependency vulnerabilities (`npm audit` / `pip-audit` clean).
+- **Hardened CI pipeline** — every push/PR runs four gates: Socket supply-chain scan, gitleaks secret scan, dependency audits (hard gates), and builds (tsc + vite + pytest).
+- **Backend test suite** — 23 pytest tests covering the scanner's pure functions and the async scan lifecycle.
+
 ## Features
 
 | Feature | Description |
 |---------|-------------|
 | **Dashboard** | Overview of packages by ecosystem, recent scans |
 | **Scan Configuration** | Select profile, ecosystems, root directories |
-| **Scan Execution** | Trigger scans, view progress |
+| **Scan Execution** | Async scans with live status polling — the browser stays responsive |
 | **Results Table** | Filterable, searchable package list |
 | **Findings View** | Exposure matches with severity levels |
 | **Export** | Download as JSON or CSV |
@@ -52,8 +61,8 @@ docker compose up -d
 1. Open http://localhost:5173
 2. Click **Scan** in the sidebar
 3. Select a profile (baseline, project, or deep)
-4. Click **Start Scan**
-5. View results in the Dashboard or Results page
+4. Click **Start Scan** — the scan starts in the background
+5. Results appear automatically on the Results page once the scan completes (deep scans can take a few minutes)
 
 ## Architecture
 
@@ -65,16 +74,26 @@ docker compose up -d
      Port 5173              Port 8001              Subprocess
 ```
 
+### Scan lifecycle
+
+Scans execute as background tasks so the API never blocks on the CLI:
+
+1. `POST /api/scans` → creates a `running` record and returns **202** immediately
+2. The scan runs detached; the CLI's NDJSON output is parsed into packages + findings
+3. `GET /api/scans/{id}` is polled by the UI — status transitions `running → completed` (or `failed`)
+4. On completion, `GET /api/scans/{id}/packages` and `/findings` stream the results
+
 ### Tech Stack
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
 | **Frontend** | React 18 + TypeScript | UI framework |
+| **Build tooling** | Vite 8 (Rolldown) + react-router 7 | Dev server, bundling, routing |
 | **Styling** | TailwindCSS + shadcn/ui | Styling and components |
 | **Charts** | Recharts | Data visualization |
 | **State** | Zustand | State management |
-| **Backend** | Python 3.11 + FastAPI | API server |
-| **Database** | SQLite | Scan metadata storage |
+| **Backend** | Python 3.11+ + FastAPI | API server |
+| **Database** | SQLite (aiosqlite) | Scan metadata storage |
 | **Scanner** | Bumblebee CLI | Package scanning |
 
 ## Project Structure
@@ -83,11 +102,13 @@ docker compose up -d
 bumblebee-gui/
 ├── backend/
 │   ├── bumblebee_gui/
-│   │   ├── main.py          # FastAPI app + API endpoints
+│   │   ├── main.py          # FastAPI app + API endpoints (async scan lifecycle)
 │   │   ├── scanner.py       # Bumblebee CLI wrapper
 │   │   ├── database.py      # SQLite operations
 │   │   └── models.py        # Pydantic models
-│   └── requirements.txt
+│   ├── tests/               # pytest suite (scanner + API lifecycle)
+│   ├── requirements.txt     # Runtime dependencies
+│   └── requirements-dev.txt # Dev dependencies (pytest, httpx2)
 ├── frontend/
 │   ├── src/
 │   │   ├── components/      # Reusable UI components
@@ -95,6 +116,7 @@ bumblebee-gui/
 │   │   ├── lib/             # Utilities, API client
 │   │   └── stores/          # Zustand stores
 │   └── package.json
+├── .github/workflows/ci.yml # CI pipeline (4 gates)
 ├── docker-compose.yml       # Development environment
 ├── Dockerfile.backend       # Backend container
 ├── Dockerfile.frontend      # Frontend container
@@ -106,13 +128,13 @@ bumblebee-gui/
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/api/health` | Health check |
-| `POST` | `/api/scans` | Trigger a scan |
+| `POST` | `/api/scans` | Submit a scan — returns `202` + `running` record; runs in background |
 | `GET` | `/api/scans` | List recent scans |
-| `GET` | `/api/scans/{id}` | Get scan details |
+| `GET` | `/api/scans/{id}` | Get scan details (poll this for status) |
 | `DELETE` | `/api/scans/{id}` | Delete a scan |
-| `GET` | `/api/scans/{id}/packages` | Get packages from scan |
-| `GET` | `/api/scans/{id}/findings` | Get findings from scan |
-| `GET` | `/api/scans/{id}/export` | Export scan data |
+| `GET` | `/api/scans/{id}/packages` | Get packages from a completed scan |
+| `GET` | `/api/scans/{id}/findings` | Get findings from a completed scan |
+| `GET` | `/api/scans/{id}/export` | Export scan data (JSON/CSV) |
 
 ## Scan Profiles
 
@@ -127,7 +149,7 @@ bumblebee-gui/
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 22+ (required by Vite 8; Node 20.19+ also works)
 - Docker (recommended)
 
 ### Local Development (without Docker)
@@ -137,7 +159,7 @@ bumblebee-gui/
 cd backend
 python -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn bumblebee_gui.main:app --reload --port 8000
 
 # Frontend (in another terminal)
@@ -159,6 +181,27 @@ docker compose logs -f
 docker compose down
 ```
 
+## Testing
+
+```bash
+# Backend unit + API tests (requires requirements-dev.txt)
+cd backend
+python -m pytest tests -q
+
+# Frontend type-check + production build
+cd frontend
+npm run build
+```
+
+### CI pipeline
+
+Every push and pull request runs four gates in `.github/workflows/ci.yml`:
+
+1. **Socket supply-chain scan** — malicious-package / supply-chain vetting
+2. **Gitleaks secret scan** — blocks committed credentials
+3. **Dependency audits** — `pip-audit` + `npm audit` (hard gates; both clean)
+4. **Build + tests** — `tsc` + Vite build + pytest
+
 ## Data Storage
 
 Scan data is stored in `~/.bumblebee-gui/`:
@@ -174,9 +217,9 @@ Scan data is stored in `~/.bumblebee-gui/`:
 ## Security
 
 - **No hardcoded credentials** — All secrets are environment variables
-- **No PyPI** — Distribution via GitHub Releases only
 - **Local only** — Runs on localhost, no external network calls
 - **Read-only scanning** — Bumblebee only reads metadata, never modifies files
+- **Supply-chain hardening** — Socket + gitleaks + `npm audit` / `pip-audit` gates in CI
 
 ## License
 
