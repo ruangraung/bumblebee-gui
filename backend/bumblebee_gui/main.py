@@ -48,10 +48,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS for frontend
+# CORS — local Vite dev server only (localhost/127.0.0.1)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,13 +94,17 @@ async def create_scan(request: ScanRequest):
         status=ScanStatus.running,
     )
 
+    # Read the record BEFORE spawning the background task so the 202 response
+    # deterministically reports "running" — otherwise a fast scan could flip
+    # to completed before the handler re-reads it (race in the contract).
+    scan = await get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=500, detail="Failed to create scan record")
+
     task = asyncio.create_task(_run_scan_background(scan_id, request))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=500, detail="Failed to create scan record")
     return scan
 
 
