@@ -24,19 +24,20 @@ classifiers = [
     "Topic :: Security",
 ]
 dependencies = [
-    "fastapi>=0.104.0",
-    "uvicorn[standard]>=0.24.0",
-    "pydantic>=2.5.0",
-    "python-multipart>=0.0.6",
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.3",
+    "pydantic==2.13.4",
+    "python-multipart==0.0.32",
+    "aiosqlite==0.22.1",
 ]
 
 [project.scripts]
 bumblebee-gui = "bumblebee_gui.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/user/bumblebee-gui"
-Repository = "https://github.com/user/bumblebee-gui"
-Issues = "https://github.com/user/bumblebee-gui/issues"
+Homepage = "https://github.com/ruangraung/bumblebee-gui"
+Repository = "https://github.com/ruangraung/bumblebee-gui"
+Issues = "https://github.com/ruangraung/bumblebee-gui/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend/bumblebee_gui"]
