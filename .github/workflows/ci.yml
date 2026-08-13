@@ -68,11 +68,13 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements-dev.txt
       - name: pip-audit (CVE gate)
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements.txt
+      - name: pytest (backend unit tests)
+        run: python -m pytest backend/tests -q
 
   frontend:
     name: Frontend audit + build
