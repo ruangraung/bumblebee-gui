@@ -11,7 +11,16 @@ type SortKey = 'name-asc' | 'name-desc' | 'ecosystem' | 'version'
 
 export default function Results() {
   const { scanId } = useParams<{ scanId?: string }>()
-  const { scans, packages, loading, error, fetchScans, fetchPackages, clearError } = useScanStore()
+  const {
+    scans,
+    packages,
+    loading,
+    error,
+    fetchScans,
+    fetchPackages,
+    waitForScan,
+    clearError,
+  } = useScanStore()
 
   const [search, setSearch] = useState('')
   const [ecosystemFilter, setEcosystemFilter] = useState<string>('all')
@@ -35,12 +44,22 @@ export default function Results() {
     fetchScans()
   }, [fetchScans])
 
-  // Fetch packages once we have an active scan
+  // Fetch packages once the scan has completed (running scans have no data file yet)
   useEffect(() => {
-    if (activeScan) {
+    if (activeScan && activeScan.status === 'completed') {
       fetchPackages(activeScan.id)
     }
   }, [activeScan, fetchPackages])
+
+  // Poll while the scan is running; results load automatically once completed
+  const scanStatus = activeScan?.status
+  useEffect(() => {
+    if (activeScan && (scanStatus === 'running' || scanStatus === 'pending')) {
+      waitForScan(activeScan.id).catch(() => {
+        // Errors are surfaced through the store
+      })
+    }
+  }, [activeScan?.id, scanStatus, waitForScan])
 
   // Reset page when filters change
   useEffect(() => {
@@ -186,7 +205,9 @@ export default function Results() {
         <h1 className="text-2xl font-bold">Results</h1>
         <p className="text-muted-foreground mt-1">
           {activeScan
-            ? `${scanDate} ${activeScan.profile} (${totalPackages} packages)`
+            ? activeScan.status === 'completed'
+              ? `${scanDate} ${activeScan.profile} (${totalPackages} packages)`
+              : `${scanDate} ${activeScan.profile} — ${activeScan.status}`
             : 'No scan selected. Run a scan first.'}
         </p>
       </div>
@@ -239,6 +260,16 @@ export default function Results() {
         </div>
       ) : !activeScan ? (
         <EmptyState message="Run a scan to see package results here." />
+      ) : activeScan.status === 'running' || activeScan.status === 'pending' ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-muted-foreground mt-4">
+            Scan is running — this can take a few minutes for deep scans. Results will
+            appear automatically.
+          </p>
+        </div>
+      ) : activeScan.status === 'failed' ? (
+        <EmptyState message="This scan failed. Check the backend logs and try again." />
       ) : filtered.length === 0 ? (
         <EmptyState message={search || ecosystemFilter !== 'all' ? 'No packages match your filters.' : 'No packages found in this scan.'} />
       ) : (

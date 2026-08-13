@@ -1,6 +1,8 @@
+import asyncio
 import csv
 import io
 import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -24,6 +26,12 @@ from .models import (
     ScanStatus,
 )
 from .scanner import get_scan_findings, get_scan_packages, run_scan
+
+logger = logging.getLogger("bumblebee_gui")
+
+# Strong references to in-flight scan tasks so they are not garbage-collected
+# mid-execution (asyncio keeps only weak references otherwise).
+_background_tasks: set[asyncio.Task] = set()
 
 
 @asynccontextmanager
@@ -62,46 +70,38 @@ async def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-@app.post("/api/scans", response_model=ScanRecord, status_code=201)
-async def create_scan(request: ScanRequest):
-    """Trigger a new scan."""
-    # Create scan record with "running" status
-    scan_id = await insert_scan(
-        profile=request.profile,
-        status=ScanStatus.running,
-    )
-
+async def _run_scan_background(scan_id: int, request: ScanRequest) -> None:
+    """Execute a scan and update its record; runs detached from any request."""
     try:
-        # Run the actual scan
         summary, ndjson_path = await run_scan(request)
-
-        # Update with results
         await update_scan_status(
             scan_id=scan_id,
             status=ScanStatus.completed,
             summary=summary,
             ndjson_path=str(ndjson_path),
         )
-
-        # Fetch and return the completed record
-        scan = await get_scan(scan_id)
-        if not scan:
-            raise HTTPException(status_code=500, detail="Failed to retrieve scan after completion")
-
-        # Attach ndjson_path (not stored in DB via update_scan_status)
-        return scan
-
-    except RuntimeError as e:
-        # Scan failed — mark as failed and return the record
+    except Exception:
+        logger.exception("Scan %s failed", scan_id)
         await update_scan_status(scan_id=scan_id, status=ScanStatus.failed)
-        scan = await get_scan(scan_id)
-        if scan:
-            return scan
-        raise HTTPException(status_code=500, detail=str(e))
 
-    except Exception as e:
-        await update_scan_status(scan_id=scan_id, status=ScanStatus.failed)
-        raise HTTPException(status_code=500, detail=f"Scan failed: {e}")
+
+@app.post("/api/scans", response_model=ScanRecord, status_code=202)
+async def create_scan(request: ScanRequest):
+    """Submit a new scan. Runs in the background; poll
+    GET /api/scans/{scan_id} for status transitions to completed/failed."""
+    scan_id = await insert_scan(
+        profile=request.profile,
+        status=ScanStatus.running,
+    )
+
+    task = asyncio.create_task(_run_scan_background(scan_id, request))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    scan = await get_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=500, detail="Failed to create scan record")
+    return scan
 
 
 @app.get("/api/scans", response_model=list[ScanRecord])
