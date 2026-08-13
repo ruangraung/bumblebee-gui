@@ -16,10 +16,10 @@ Bumblebee is a powerful CLI tool for scanning local filesystems for package meta
 
 Actively developed (as of August 2026):
 
-- **Background scan execution** — scans no longer block the browser. `POST /api/scans` returns immediately (`202`); the scan runs server-side and the UI polls for status until completion.
+- **Background scan execution** — scans no longer block the browser. `POST /api/scans` returns immediately (`202`); the scan runs server-side (NDJSON streamed to disk line-by-line) and the UI polls for status until completion. Running scans report live progress (`packages_found`) and can be cancelled — the CLI process is killed and the partial output cleaned up.
 - **Modern frontend stack** — migrated to **Vite 8 (Rolldown engine)** + **react-router 7**; zero known dependency vulnerabilities (`npm audit` / `pip-audit` clean).
 - **Hardened CI pipeline** — every push/PR runs four gates: Socket supply-chain scan, gitleaks secret scan, dependency audits (hard gates), and builds (tsc + vite + pytest).
-- **Backend test suite** — 23 pytest tests covering the scanner's pure functions and the async scan lifecycle.
+- **Backend test suite** — 29 pytest tests covering the scanner's pure functions, the real subprocess streaming/cancellation path, and the async scan lifecycle.
 
 ## Features
 
@@ -78,10 +78,11 @@ docker compose up -d
 
 Scans execute as background tasks so the API never blocks on the CLI:
 
-1. `POST /api/scans` → creates a `running` record and returns **202** immediately
-2. The scan runs detached; the CLI's NDJSON output is parsed into packages + findings
-3. `GET /api/scans/{id}` is polled by the UI — status transitions `running → completed` (or `failed`)
+1. `POST /api/scans` → creates a `running` record (output path reserved up front) and returns **202** immediately
+2. The scan runs detached; the CLI's NDJSON output is **streamed to disk line-by-line** as it is produced
+3. `GET /api/scans/{id}` is polled by the UI — status transitions `running → completed` (or `failed`); while running, the record reports `packages_found` as live progress
 4. On completion, `GET /api/scans/{id}/packages` and `/findings` stream the results
+5. `DELETE /api/scans/{id}` while running cancels the scan — the background task is cancelled, the CLI subprocess killed, and the partial NDJSON file removed
 
 ### Tech Stack
 
@@ -130,8 +131,8 @@ bumblebee-gui/
 | `GET` | `/api/health` | Health check |
 | `POST` | `/api/scans` | Submit a scan — returns `202` + `running` record; runs in background |
 | `GET` | `/api/scans` | List recent scans |
-| `GET` | `/api/scans/{id}` | Get scan details (poll this for status) |
-| `DELETE` | `/api/scans/{id}` | Delete a scan |
+| `GET` | `/api/scans/{id}` | Get scan details (poll this for status; includes live `packages_found` while running) |
+| `DELETE` | `/api/scans/{id}` | Delete a scan — cancels it first if it is still running |
 | `GET` | `/api/scans/{id}/packages` | Get packages from a completed scan |
 | `GET` | `/api/scans/{id}/findings` | Get findings from a completed scan |
 | `GET` | `/api/scans/{id}/export` | Export scan data (JSON/CSV) |

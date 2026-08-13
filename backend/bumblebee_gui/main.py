@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from .database import (
     delete_scan,
+    fail_stale_running_scans,
     get_scan,
     get_scans,
     init_db,
@@ -25,19 +26,27 @@ from .models import (
     ScanRequest,
     ScanStatus,
 )
-from .scanner import get_scan_findings, get_scan_packages, run_scan
+from .scanner import (
+    count_packages,
+    generate_ndjson_path,
+    get_scan_findings,
+    get_scan_packages,
+    run_scan,
+)
 
 logger = logging.getLogger("bumblebee_gui")
 
-# Strong references to in-flight scan tasks so they are not garbage-collected
-# mid-execution (asyncio keeps only weak references otherwise).
-_background_tasks: set[asyncio.Task] = set()
+# Strong references to in-flight scan tasks keyed by scan id, so they are not
+# garbage-collected mid-execution (asyncio keeps only weak references) and can
+# be cancelled by id when a running scan is deleted.
+_background_tasks: dict[int, asyncio.Task] = {}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: initialize DB on startup."""
+    """Application lifespan: initialize DB on startup and recover stale rows."""
     await init_db()
+    await fail_stale_running_scans()
     yield
 
 
@@ -70,10 +79,12 @@ async def health():
     return {"status": "ok", "version": "0.1.0"}
 
 
-async def _run_scan_background(scan_id: int, request: ScanRequest) -> None:
+async def _run_scan_background(
+    scan_id: int, request: ScanRequest, ndjson_path: Path
+) -> None:
     """Execute a scan and update its record; runs detached from any request."""
     try:
-        summary, ndjson_path = await run_scan(request)
+        summary, _ = await run_scan(request, ndjson_path)
         await update_scan_status(
             scan_id=scan_id,
             status=ScanStatus.completed,
@@ -89,9 +100,13 @@ async def _run_scan_background(scan_id: int, request: ScanRequest) -> None:
 async def create_scan(request: ScanRequest):
     """Submit a new scan. Runs in the background; poll
     GET /api/scans/{scan_id} for status transitions to completed/failed."""
+    # The output path is decided up front so the record carries it from the
+    # start — a cancelled scan can then clean up its partial file.
+    ndjson_path = generate_ndjson_path(request.profile)
     scan_id = await insert_scan(
         profile=request.profile,
         status=ScanStatus.running,
+        ndjson_path=str(ndjson_path),
     )
 
     # Read the record BEFORE spawning the background task so the 202 response
@@ -101,9 +116,9 @@ async def create_scan(request: ScanRequest):
     if not scan:
         raise HTTPException(status_code=500, detail="Failed to create scan record")
 
-    task = asyncio.create_task(_run_scan_background(scan_id, request))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    task = asyncio.create_task(_run_scan_background(scan_id, request, ndjson_path))
+    _background_tasks[scan_id] = task
+    task.add_done_callback(lambda _t, sid=scan_id: _background_tasks.pop(sid, None))
 
     return scan
 
@@ -116,21 +131,45 @@ async def list_scans(limit: int = Query(default=20, ge=1, le=100)):
 
 @app.get("/api/scans/{scan_id}", response_model=ScanRecord)
 async def get_scan_detail(scan_id: int):
-    """Get scan details by ID."""
+    """Get scan details by ID, with live progress while running."""
     scan = await get_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
+
+    # Live progress: packages discovered so far while running; the final total
+    # once completed. Findings-only scans report 0 until done — findings are
+    # only counted in the summary.
+    packages_found = None
+    if scan.status == ScanStatus.completed and scan.summary:
+        packages_found = scan.summary.total_packages
+    elif scan.status == ScanStatus.running and scan.ndjson_path:
+        packages_found = count_packages(Path(scan.ndjson_path))
+
+    if packages_found is not None:
+        scan = scan.model_copy(update={"packages_found": packages_found})
     return scan
 
 
 @app.delete("/api/scans/{scan_id}")
 async def delete_scan_record(scan_id: int):
-    """Delete a scan by ID."""
+    """Delete a scan by ID. If it is still running, cancels it first."""
     # Fetch scan first to get ndjson_path for cleanup
     scan = await get_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-    # Clean up NDJSON file on disk
+
+    # If the scan is still running, cancel its background task. The task kills
+    # the CLI subprocess (see scanner.run_scan) before finishing, so no zombie
+    # scan keeps running after the record is gone.
+    task = _background_tasks.get(scan_id)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=10)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+
+    # Clean up NDJSON file on disk (covers the partial file of a cancelled run)
     if scan.ndjson_path:
         Path(scan.ndjson_path).unlink(missing_ok=True)
     deleted = await delete_scan(scan_id)
