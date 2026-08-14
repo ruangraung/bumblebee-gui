@@ -3,25 +3,15 @@ import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 
 export default function ThemeToggle() {
+  // Dark-mode-first: default to dark unless the user explicitly chose light.
   const [isDark, setIsDark] = useState(() => {
-    // Check localStorage first, then system preference
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("theme");
-      if (stored) {
-        return stored === "dark";
-      }
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return false;
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("theme") !== "light";
   });
 
   useEffect(() => {
     const root = document.documentElement;
-    if (isDark) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
+    root.classList.toggle("dark", isDark);
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }, [isDark]);
 
@@ -29,13 +19,15 @@ export default function ThemeToggle() {
     <Button
       variant="ghost"
       size="icon"
-      onClick={() => setIsDark(!isDark)}
+      className="h-8 w-8"
+      onClick={() => setIsDark((d) => !d)}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      title={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
       {isDark ? (
-        <Sun className="h-5 w-5" />
+        <Sun className="h-[18px] w-[18px]" />
       ) : (
-        <Moon className="h-5 w-5" />
+        <Moon className="h-[18px] w-[18px]" />
       )}
     </Button>
   );

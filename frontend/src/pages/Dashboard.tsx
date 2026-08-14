@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, Layers, AlertTriangle, Clock } from 'lucide-react'
+import { Package, Layers, AlertTriangle, Clock, Scan } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { StatsCard } from '@/components/StatsCard'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Button } from '@/components/ui/button'
+import { Badge, statusVariant } from '@/components/ui/badge'
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -15,115 +16,134 @@ export default function Dashboard() {
   }, [fetchScans])
 
   const lastScan = scans.length > 0 ? scans[0] : undefined
-
-  if (!loading && scans.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <Package className="h-16 w-16 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold">No scans yet</h2>
-        <p className="text-muted-foreground mt-2 mb-6">
-          Run your first scan to see results here.
-        </p>
-        <Button onClick={() => navigate('/scan')}>Run First Scan</Button>
-      </div>
-    )
-  }
-
   const totalPackages = lastScan?.summary?.total_packages ?? 0
   const ecosystems = lastScan?.summary?.ecosystems_found ?? 0
   const findingsCount = lastScan?.summary?.findings_count ?? 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button onClick={() => navigate('/scan')}>Scan Now</Button>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatsCard
-          title="Total Packages"
-          value={totalPackages}
-          icon={<Package className="h-5 w-5" />}
-        />
-        <StatsCard
-          title="Ecosystems"
-          value={ecosystems}
-          icon={<Layers className="h-5 w-5" />}
-        />
-        {findingsCount > 0 && (
-          <StatsCard
-            title="Findings"
-            value={findingsCount}
-            icon={<AlertTriangle className="h-5 w-5" />}
-          />
-        )}
-      </div>
-
-      {lastScan && (
-        <div className="rounded-lg border bg-card p-4 flex items-center gap-3">
-          <Clock className="h-5 w-5 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Last scan: {new Date(lastScan.timestamp).toLocaleString()} &middot;{' '}
-            Profile: {lastScan.profile}
+    <div className="mx-auto max-w-5xl space-y-8">
+      {/* Header */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Supply-chain security at a glance.
           </p>
         </div>
-      )}
+        <Button onClick={() => navigate('/scan')}>
+          <Scan className="mr-1.5 h-4 w-4" />
+          New scan
+        </Button>
+      </div>
 
-      {lastScan?.summary?.ecosystems_found &&
-        lastScan.summary.ecosystems_found > 0 &&
-        lastScan.summary.ecosystem_counts && (
-          <div className="rounded-lg border bg-card p-6">
-            <h2 className="text-lg font-semibold mb-4">Ecosystems</h2>
-            <EcosystemChart data={lastScan.summary.ecosystem_counts} />
+      {!loading && scans.length === 0 ? (
+        <EmptyState onScan={() => navigate('/scan')} />
+      ) : (
+        <>
+          {/* Stat cards */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatsCard
+              title="Packages"
+              value={totalPackages}
+              icon={<Package className="h-4 w-4" />}
+            />
+            <StatsCard
+              title="Ecosystems"
+              value={ecosystems}
+              icon={<Layers className="h-4 w-4" />}
+            />
+            <StatsCard
+              title="Findings"
+              value={findingsCount}
+              icon={<AlertTriangle className="h-4 w-4" />}
+            />
           </div>
-        )}
 
-      {scans.length > 0 && (
-        <div className="rounded-lg border bg-card">
-          <div className="p-4 border-b">
-            <h2 className="text-lg font-semibold">Recent Scans</h2>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b text-left text-sm text-muted-foreground">
-                <th className="p-4 font-medium">ID</th>
-                <th className="p-4 font-medium">Timestamp</th>
-                <th className="p-4 font-medium">Profile</th>
-                <th className="p-4 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scans.slice(0, 5).map((scan) => (
-                <tr
-                  key={scan.id}
-                  className="border-b last:border-0 cursor-pointer hover:bg-accent"
-                  onClick={() => navigate(`/results/${scan.id}`)}
-                >
-                  <td className="p-4">{scan.id}</td>
-                  <td className="p-4">
-                    {new Date(scan.timestamp).toLocaleString()}
-                  </td>
-                  <td className="p-4">{scan.profile}</td>
-                  <td className="p-4">
-                    <span
-                      className={
-                        scan.status === 'completed'
-                          ? 'text-green-600'
-                          : scan.status === 'failed'
-                          ? 'text-red-600'
-                          : 'text-yellow-600'
-                      }
+          {/* Last scan line */}
+          {lastScan && (
+            <div className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                Last scan{' '}
+                <span className="font-mono text-foreground">
+                  {new Date(lastScan.timestamp).toLocaleString()}
+                </span>{' '}
+                · profile{' '}
+                <span className="font-mono text-foreground">{lastScan.profile}</span>
+              </p>
+            </div>
+          )}
+
+          {/* Ecosystem chart */}
+          {lastScan?.summary?.ecosystem_counts &&
+            Object.keys(lastScan.summary.ecosystem_counts).length > 0 && (
+              <div className="rounded-lg border bg-card p-6">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                  Ecosystem distribution
+                </h2>
+                <div className="mt-4">
+                  <EcosystemChart data={lastScan.summary.ecosystem_counts} />
+                </div>
+              </div>
+            )}
+
+          {/* Recent scans */}
+          {scans.length > 0 && (
+            <div className="rounded-lg border bg-card">
+              <div className="border-b border-border px-4 py-3">
+                <h2 className="text-sm font-medium">Recent scans</h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-2.5 font-medium">ID</th>
+                    <th className="px-4 py-2.5 font-medium">Timestamp</th>
+                    <th className="px-4 py-2.5 font-medium">Profile</th>
+                    <th className="px-4 py-2.5 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scans.slice(0, 5).map((scan) => (
+                    <tr
+                      key={scan.id}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-accent/50"
+                      onClick={() => navigate(`/results/${scan.id}`)}
                     >
-                      {scan.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        #{scan.id}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">
+                        {new Date(scan.timestamp).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{scan.profile}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={statusVariant(scan.status)}>{scan.status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
+    </div>
+  )
+}
+
+function EmptyState({ onScan }: { onScan: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
+      <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
+        <Package className="h-6 w-6" />
+      </div>
+      <h2 className="mt-4 text-lg font-medium">No scans yet</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Run your first scan to see results here.
+      </p>
+      <Button className="mt-6" onClick={onScan}>
+        Run first scan
+      </Button>
     </div>
   )
 }
