@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   api,
+  type ScanEvent,
   type ScanRecord,
   type ScanRequest,
   type PackageRecord,
@@ -20,6 +21,8 @@ interface ScanState {
   fetchScans: () => Promise<void>
   fetchScan: (id: number) => Promise<void>
   waitForScan: (id: number, intervalMs?: number) => Promise<ScanRecord | null>
+  sseWaitForScan: (id: number) => Promise<ScanRecord | null>
+  pollWaitForScan: (id: number, intervalMs?: number) => Promise<ScanRecord | null>
   fetchPackages: (id: number) => Promise<void>
   fetchFindings: (id: number) => Promise<void>
   createScan: (request: ScanRequest) => Promise<ScanRecord>
@@ -56,7 +59,8 @@ export const useScanStore = create<ScanState>((set, get) => ({
     }
   },
 
-  waitForScan: async (id: number, intervalMs = 2000) => {
+  // Polling fallback: the original 2s-poll loop, used when SSE is unavailable.
+  pollWaitForScan: async (id: number, intervalMs = 2000) => {
     // Poll until the scan reaches a terminal state (completed/failed).
     // Caps at ~30 minutes to avoid polling forever on a wedged backend.
     for (let attempt = 0; attempt < 900; attempt += 1) {
@@ -84,6 +88,91 @@ export const useScanStore = create<ScanState>((set, get) => ({
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
     }
     throw new Error(`Scan ${id} did not complete within 30 minutes`)
+  },
+
+  // SSE-first wait: subscribes to the scan's event stream and resolves on a
+  // terminal event (completed/failed/cancelled). Live progress updates the
+  // store as `packages_found` ticks up, so the UI re-renders without polling.
+  sseWaitForScan: async (id: number) => {
+    const applyProgress = (n?: number) => {
+      if (typeof n !== 'number') return
+      const current = get().currentScan
+      set({
+        currentScan: current ? { ...current, packages_found: n } : null,
+        scans: get().scans.map((s) => (s.id === id ? { ...s, packages_found: n } : s)),
+      })
+    }
+
+    return await new Promise<ScanRecord | null>((resolve, reject) => {
+      const es = new EventSource(api.scanEventsUrl(id))
+      let gotMessage = false
+
+      const finishWithFetch = () => {
+        es.close()
+        api.getScan(id)
+          .then((scan) => {
+            set({
+              currentScan: scan,
+              scans: get().scans.map((s) => (s.id === id ? scan : s)),
+            })
+            resolve(scan)
+          })
+          .catch(reject)
+      }
+
+      es.addEventListener('snapshot', (e) => {
+        gotMessage = true
+        const data = JSON.parse((e as MessageEvent).data) as ScanEvent
+        if (data.status === 'completed' || data.status === 'failed') {
+          // Already terminal on connect — grab the final record.
+          finishWithFetch()
+        } else {
+          applyProgress(data.packages_found)
+        }
+      })
+
+      es.addEventListener('progress', (e) => {
+        gotMessage = true
+        const data = JSON.parse((e as MessageEvent).data) as ScanEvent
+        applyProgress(data.packages_found)
+      })
+
+      es.addEventListener('completed', () => {
+        gotMessage = true
+        finishWithFetch()
+      })
+
+      es.addEventListener('failed', () => {
+        gotMessage = true
+        finishWithFetch()
+      })
+
+      es.addEventListener('cancelled', () => {
+        es.close()
+        resolve(null)
+      })
+
+      es.onerror = () => {
+        if (!gotMessage) {
+          // Couldn't connect to the event stream — fall back to polling.
+          es.close()
+          reject(new Error('SSE connection failed'))
+        }
+        // Otherwise EventSource auto-reconnects; transient drops are ignored.
+      }
+    })
+  },
+
+  waitForScan: async (id: number, intervalMs = 2000) => {
+    // Prefer live push (SSE); fall back to polling if unavailable.
+    if (typeof EventSource !== 'undefined') {
+      try {
+        return await get().sseWaitForScan(id)
+      } catch {
+        // Fall through to polling below.
+      }
+    }
+    return get().pollWaitForScan(id, intervalMs)
   },
 
   fetchPackages: async (id: number) => {
