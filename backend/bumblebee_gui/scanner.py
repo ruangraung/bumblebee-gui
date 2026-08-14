@@ -1,9 +1,10 @@
 import asyncio
 import json
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from .models import (
     ScanRequest,
@@ -89,8 +90,22 @@ def calculate_summary(packages: List[dict], findings: List[dict]) -> ScanSummary
     )
 
 
+async def _iter_lines(stream):
+    """Yield complete lines from an async byte stream, buffering partials."""
+    buf = b""
+    async for chunk in stream:
+        buf += chunk
+        *lines, buf = buf.split(b"\n")
+        for line in lines:
+            yield line.rstrip(b"\r")
+    if buf:
+        yield buf.rstrip(b"\r")
+
+
 async def run_scan(
-    request: ScanRequest, ndjson_path: Optional[Path] = None
+    request: ScanRequest,
+    ndjson_path: Optional[Path] = None,
+    on_progress: Optional[Callable[[int], None]] = None,
 ) -> tuple[ScanSummary, Path]:
     """Execute a Bumblebee scan, streaming NDJSON output to disk as it arrives.
 
@@ -99,6 +114,10 @@ async def run_scan(
     observable (see ``count_packages``) and keeps partial output when a scan
     fails or is cancelled. On cancellation the CLI subprocess is killed so a
     cancelled scan never keeps scanning in the background.
+
+    ``on_progress``, when given, is called with the running package count as
+    packages stream in — throttled to every 25 packages or 0.5s, whichever comes
+    first — so callers can push live updates without re-reading the file.
     """
     ensure_dirs()
 
@@ -120,9 +139,21 @@ async def run_scan(
     stderr_task = asyncio.create_task(process.stderr.read())
 
     try:
+        packages_seen = 0
+        last_emit = 0.0
         with open(ndjson_path, "wb") as out:
-            async for raw in process.stdout:
-                out.write(raw)
+            async for line in _iter_lines(process.stdout):
+                out.write(line + b"\n")
+                if on_progress is not None and line and b"package" in line:
+                    try:
+                        if json.loads(line).get("record_type") == "package":
+                            packages_seen += 1
+                            now = time.monotonic()
+                            if packages_seen % 25 == 0 or now - last_emit >= 0.5:
+                                last_emit = now
+                                on_progress(packages_seen)
+                    except json.JSONDecodeError:
+                        continue
         await process.wait()
         stderr = await stderr_task
     except asyncio.CancelledError:

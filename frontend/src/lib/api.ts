@@ -52,6 +52,16 @@ export interface FindingRecord {
   confidence?: string
 }
 
+export type ScanEventType = 'snapshot' | 'progress' | 'completed' | 'failed' | 'cancelled'
+
+export interface ScanEvent {
+  type: ScanEventType
+  status?: string
+  packages_found?: number
+  summary?: ScanSummary
+  error?: string
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
@@ -100,6 +110,10 @@ export const api = {
 
   async getScanFindings(id: number): Promise<FindingRecord[]> {
     return request(`/api/scans/${id}/findings`)
+  },
+
+  scanEventsUrl(id: number): string {
+    return `/api/scans/${id}/events`
   },
 
   async exportScan(id: number, format: 'json' | 'csv'): Promise<Blob> {
