@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, Copy, Search, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { Download, Copy, Search, ChevronLeft, ChevronRight, X, Scan } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
+import { Badge } from '@/components/ui/badge'
 
 const PAGE_SIZE = 50
 
@@ -35,25 +36,21 @@ export default function Results() {
     if (scanId) {
       return scans.find((s) => s.id === Number(scanId)) ?? null
     }
-    // Latest completed scan, or just the latest scan
     const completed = scans.filter((s) => s.status === 'completed')
     if (completed.length > 0) return completed[0]
     return scans[0] ?? null
   }, [scans, scanId])
 
-  // Load scans list on mount
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
-  // Fetch packages once the scan has completed (running scans have no data file yet)
   useEffect(() => {
     if (activeScan && activeScan.status === 'completed') {
       fetchPackages(activeScan.id)
     }
   }, [activeScan, fetchPackages])
 
-  // Poll while the scan is running; results load automatically once completed
   const scanStatus = activeScan?.status
   useEffect(() => {
     if (activeScan && (scanStatus === 'running' || scanStatus === 'pending')) {
@@ -63,33 +60,27 @@ export default function Results() {
     }
   }, [activeScan?.id, scanStatus, waitForScan])
 
-  // Reset page when filters change
   useEffect(() => {
     setPage(1)
   }, [search, ecosystemFilter, sortKey])
 
-  // Derive unique ecosystems from packages
   const ecosystems = useMemo(() => {
     const set = new Set(packages.map((p) => p.ecosystem))
     return Array.from(set).sort()
   }, [packages])
 
-  // Filter + sort
   const filtered = useMemo(() => {
     let result = [...packages]
 
-    // Fuzzy search by name
     if (search.trim()) {
       const q = search.toLowerCase()
       result = result.filter((p) => p.package_name.toLowerCase().includes(q))
     }
 
-    // Ecosystem filter
     if (ecosystemFilter !== 'all') {
       result = result.filter((p) => p.ecosystem === ecosystemFilter)
     }
 
-    // Sort
     result.sort((a, b) => {
       switch (sortKey) {
         case 'name-asc':
@@ -108,7 +99,6 @@ export default function Results() {
     return result
   }, [packages, search, ecosystemFilter, sortKey])
 
-  // Pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paged = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
@@ -118,7 +108,6 @@ export default function Results() {
   const pageStart = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const pageEnd = Math.min(page * PAGE_SIZE, filtered.length)
 
-  // Generate page numbers to display (show first, last, current ± 1, with ellipses)
   const pageNumbers = useMemo(() => {
     const pages: (number | '...')[] = []
     if (totalPages <= 7) {
@@ -135,8 +124,6 @@ export default function Results() {
     return pages
   }, [totalPages, page])
 
-  // Cancel the running scan: the backend cancels the task, kills the CLI and
-  // removes the record + partial file; we head back to the dashboard.
   const handleCancel = useCallback(async () => {
     if (!activeScan) return
     await deleteScan(activeScan.id)
@@ -144,7 +131,6 @@ export default function Results() {
   }, [activeScan, deleteScan, navigate])
 
   // ── Export helpers ──
-
   const exportJSON = useCallback(() => {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -177,22 +163,7 @@ export default function Results() {
     setTimeout(() => setCopied(false), 2000)
   }, [filtered])
 
-  // Ecosystem badge color
-  const ecosystemColor = (eco: string): string => {
-    const map: Record<string, string> = {
-      npm: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-      pypi: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      cargo: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-      go: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-      maven: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-      nuget: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-      gem: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-    }
-    return map[eco] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-  }
-
   // ── Render ──
-
   const scanDate = activeScan?.timestamp
     ? new Date(activeScan.timestamp).toISOString().slice(0, 10)
     : '—'
@@ -201,31 +172,30 @@ export default function Results() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-destructive font-medium mb-2">Failed to load results</p>
-        <p className="text-sm text-muted-foreground mb-4">{error}</p>
+        <p className="font-medium text-destructive">Failed to load results</p>
+        <p className="mb-4 text-sm text-muted-foreground">{error}</p>
         <Button variant="outline" onClick={clearError}>Dismiss</Button>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       {/* ── Header ── */}
       <div>
-        <h1 className="text-2xl font-bold">Results</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-2xl font-semibold tracking-tight">Results</h1>
+        <p className="mt-1 font-mono text-sm text-muted-foreground">
           {activeScan
             ? activeScan.status === 'completed'
-              ? `${scanDate} ${activeScan.profile} (${totalPackages} packages)`
-              : `${scanDate} ${activeScan.profile} — ${activeScan.status}`
-            : 'No scan selected. Run a scan first.'}
+              ? `${scanDate} · ${activeScan.profile} · ${totalPackages} packages`
+              : `${scanDate} · ${activeScan.profile} · ${activeScan.status}`
+            : 'no scan selected — run a scan first'}
         </p>
       </div>
 
       {/* ── Filters bar ── */}
       {packages.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -237,19 +207,17 @@ export default function Results() {
             />
           </div>
 
-          {/* Ecosystem dropdown */}
           <select
             value={ecosystemFilter}
             onChange={(e) => setEcosystemFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 rounded-md border border-input bg-background px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="all">All Ecosystems</option>
+            <option value="all">all ecosystems</option>
             {ecosystems.map((eco) => (
               <option key={eco} value={eco}>{eco}</option>
             ))}
           </select>
 
-          {/* Sort dropdown */}
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
@@ -263,72 +231,62 @@ export default function Results() {
         </div>
       )}
 
-      {/* ── Table ── */}
+      {/* ── Body ── */}
       {loading && packages.length === 0 ? (
-        <div className="flex items-center justify-center py-24">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
+        <Loading />
       ) : !activeScan ? (
         <EmptyState message="Run a scan to see package results here." />
       ) : activeScan.status === 'running' || activeScan.status === 'pending' ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground mt-4">
-            Scan is running — this can take a few minutes for deep scans. Results will
-            appear automatically.
-          </p>
-          {typeof activeScan.packages_found === 'number' && activeScan.packages_found > 0 && (
-            <p className="text-sm text-muted-foreground mt-2">
-              {activeScan.packages_found.toLocaleString()} packages found so far
-            </p>
-          )}
-          <Button variant="destructive" size="sm" className="mt-6" onClick={handleCancel}>
-            <X className="mr-1.5 h-4 w-4" />
-            Cancel scan
-          </Button>
-        </div>
+        <ScanningState
+          packagesFound={activeScan.packages_found}
+          onCancel={handleCancel}
+        />
       ) : activeScan.status === 'failed' ? (
         <EmptyState message="This scan failed. Check the backend logs and try again." />
       ) : filtered.length === 0 ? (
-        <EmptyState message={search || ecosystemFilter !== 'all' ? 'No packages match your filters.' : 'No packages found in this scan.'} />
+        <EmptyState
+          message={
+            search || ecosystemFilter !== 'all'
+              ? 'No packages match your filters.'
+              : 'No packages found in this scan.'
+          }
+        />
       ) : (
-        <div className="rounded-lg border border-border">
+        <div className="overflow-hidden rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="px-4 py-3 text-left font-medium">Package</th>
-                <th className="px-4 py-3 text-left font-medium">Ecosystem</th>
-                <th className="px-4 py-3 text-left font-medium">Version</th>
-                <th className="px-4 py-3 text-left font-medium">Source Type</th>
-                <th className="px-4 py-3 text-left font-medium">Project Path</th>
-                <th className="px-4 py-3 text-left font-medium">Confidence</th>
+              <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3 font-medium">Package</th>
+                <th className="px-4 py-3 font-medium">Ecosystem</th>
+                <th className="px-4 py-3 font-medium">Version</th>
+                <th className="px-4 py-3 font-medium">Source</th>
+                <th className="px-4 py-3 font-medium">Path</th>
+                <th className="px-4 py-3 font-medium">Confidence</th>
               </tr>
             </thead>
             <tbody>
               {paged.map((pkg, i) => (
                 <tr
                   key={`${pkg.package_name}-${pkg.version}-${i}`}
-                  className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors"
+                  className="border-b border-border last:border-0 transition-colors hover:bg-accent/40"
                 >
-                  <td className="px-4 py-2.5 font-medium">{pkg.package_name}</td>
+                  <td className="px-4 py-2.5 font-mono text-[13px] font-medium">{pkg.package_name}</td>
                   <td className="px-4 py-2.5">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ecosystemColor(pkg.ecosystem)}`}>
-                      {pkg.ecosystem}
-                    </span>
+                    <Badge variant="neutral" className="font-mono">{pkg.ecosystem}</Badge>
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs">{pkg.version}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.version}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{pkg.source_type ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground text-xs">{pkg.project_path ?? '—'}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{pkg.confidence ?? '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.project_path ?? '—'}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.confidence ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {/* Pagination footer */}
+          {/* Pagination */}
           <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <span className="text-xs text-muted-foreground">
-              Showing {pageStart}–{pageEnd} of {filtered.length}
+            <span className="font-mono text-xs text-muted-foreground">
+              {pageStart}–{pageEnd} / {filtered.length}
             </span>
             <div className="flex items-center gap-1">
               <Button
@@ -369,40 +327,81 @@ export default function Results() {
         </div>
       )}
 
-      {/* ── Export buttons ── */}
+      {/* ── Export ── */}
       {filtered.length > 0 && (
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportJSON}>
             <Download className="mr-1.5 h-4 w-4" />
-            Export JSON
+            JSON
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <Download className="mr-1.5 h-4 w-4" />
-            Export CSV
+            CSV
           </Button>
           <Button variant="outline" size="sm" onClick={copyToClipboard}>
             <Copy className="mr-1.5 h-4 w-4" />
-            {copied ? 'Copied!' : 'Copy to clipboard'}
+            {copied ? 'Copied' : 'Copy'}
           </Button>
         </div>
       )}
 
       {/* ── Summary chart ── */}
-      {activeScan?.summary?.ecosystem_counts && Object.keys(activeScan.summary.ecosystem_counts).length > 0 && (
-        <div className="rounded-lg border border-border p-4">
-          <EcosystemChart data={activeScan.summary.ecosystem_counts} />
-        </div>
-      )}
+      {activeScan?.summary?.ecosystem_counts &&
+        Object.keys(activeScan.summary.ecosystem_counts).length > 0 && (
+          <div className="rounded-lg border border-border bg-card p-4">
+            <EcosystemChart data={activeScan.summary.ecosystem_counts} />
+          </div>
+        )}
     </div>
   )
 }
 
-// ── Helpers ──
+// ── Sub-components ──
+
+function Loading() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+    </div>
+  )
+}
+
+function ScanningState({
+  packagesFound,
+  onCancel,
+}: {
+  packagesFound?: number
+  onCancel: () => void
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+      <div className="relative">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/20" />
+        <span className="relative flex h-10 w-10 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
+          <Scan className="h-5 w-5" />
+        </span>
+      </div>
+      <p className="mt-4 text-sm font-medium">Scan in progress</p>
+      <p className="mt-1 font-mono text-xs text-muted-foreground">
+        {typeof packagesFound === 'number' && packagesFound > 0
+          ? `${packagesFound.toLocaleString()} packages found so far`
+          : 'discovering packages…'}
+      </p>
+      <div className="mt-6 h-1 w-64 overflow-hidden rounded-full bg-muted">
+        <div className="h-full w-1/3 animate-scan-sweep rounded-full bg-primary" />
+      </div>
+      <Button variant="destructive" size="sm" className="mt-6" onClick={onCancel}>
+        <X className="mr-1.5 h-4 w-4" />
+        Cancel scan
+      </Button>
+    </div>
+  )
+}
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <p className="text-muted-foreground">{message}</p>
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
+      <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   )
 }
