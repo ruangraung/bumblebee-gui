@@ -2,11 +2,12 @@
 
 The scan subprocess is stubbed out; these tests verify the API contract:
 POST /api/scans returns 202 + a running record, and GET /api/scans/{id}
-transitions to completed/failed via the background task. Progress and
-cancellation semantics are covered too.
+transitions to completed/failed via the background task. Progress,
+cancellation, and Server-Sent Events semantics are covered too.
 """
 
 import asyncio
+import json
 import threading
 import time
 from pathlib import Path
@@ -28,7 +29,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", "/usr/local/bin/bumblebee")
 
     # Stub the actual scan execution — no subprocess in tests.
-    async def fake_run_scan(request, ndjson_path):
+    async def fake_run_scan(request, ndjson_path, on_progress=None):
         return (
             ScanSummary(
                 total_packages=2,
@@ -86,7 +87,7 @@ def test_create_scan_lists_running_scan(client):
 
 
 def test_scan_failure_marks_failed(client, monkeypatch):
-    async def failing_run_scan(request, ndjson_path):
+    async def failing_run_scan(request, ndjson_path, on_progress=None):
         raise RuntimeError("boom")
 
     monkeypatch.setattr("bumblebee_gui.main.run_scan", failing_run_scan)
@@ -105,6 +106,7 @@ def test_scan_endpoints_404_for_unknown_scan(client):
     assert client.get("/api/scans/9999").status_code == 404
     assert client.get("/api/scans/9999/packages").status_code == 404
     assert client.get("/api/scans/9999/findings").status_code == 404
+    assert client.get("/api/scans/9999/events").status_code == 404
 
 
 def test_cors_allows_only_local_dev_origins(client):
@@ -121,7 +123,7 @@ def test_scan_progress_reports_packages_found(client, monkeypatch, tmp_path):
     """Running scans expose live packages_found; completed scans the final total."""
     release = tmp_path / "release"
 
-    async def slow_run_scan(request, ndjson_path):
+    async def slow_run_scan(request, ndjson_path, on_progress=None):
         # Two packages found so far, then wait for the green light.
         Path(ndjson_path).parent.mkdir(parents=True, exist_ok=True)
         with open(ndjson_path, "w", encoding="utf-8") as f:
@@ -168,7 +170,7 @@ def test_delete_running_scan_cancels_task_and_cleans_up(client, monkeypatch, tmp
     """Deleting a running scan cancels the background task and removes the file."""
     cancelled = threading.Event()
 
-    async def hanging_run_scan(request, ndjson_path):
+    async def hanging_run_scan(request, ndjson_path, on_progress=None):
         try:
             Path(ndjson_path).parent.mkdir(parents=True, exist_ok=True)
             with open(ndjson_path, "w", encoding="utf-8") as f:
@@ -208,3 +210,106 @@ def test_fail_stale_running_scans(monkeypatch, tmp_path):
         return record.status
 
     assert asyncio.run(scenario()) == ScanStatus.failed
+
+
+# ── Server-Sent Events ──────────────────────────────────────────────────────
+
+
+def _sse_event_names(body: str) -> list[str]:
+    return [line[len("event: "):] for line in body.splitlines() if line.startswith("event: ")]
+
+
+def _sse_data(body: str) -> list[dict]:
+    return [json.loads(line[len("data: "):]) for line in body.splitlines() if line.startswith("data: ")]
+
+
+def test_scan_events_streams_live_progress_and_completion(client, monkeypatch, tmp_path):
+    """A live SSE subscriber receives snapshot → progress → completed."""
+    release = tmp_path / "release"
+
+    async def streaming_run_scan(request, ndjson_path, on_progress=None):
+        if on_progress:
+            on_progress(1)
+            on_progress(2)
+        while not release.exists():
+            await asyncio.sleep(0.01)
+        return (
+            ScanSummary(
+                total_packages=2,
+                ecosystems_found=1,
+                findings_count=0,
+                ecosystem_counts={"npm": 2},
+            ),
+            str(ndjson_path),
+        )
+
+    monkeypatch.setattr("bumblebee_gui.main.run_scan", streaming_run_scan)
+
+    scan_id = client.post("/api/scans", json={"profile": "baseline"}).json()["id"]
+
+    # Complete the scan on an independent timer so the stream closes on its own;
+    # we assert on the full body rather than incrementally reading lines (which
+    # deadlocks with the TestClient's buffered streaming transport).
+    threading.Thread(
+        target=lambda: (time.sleep(0.5), release.touch()), daemon=True
+    ).start()
+
+    with client.stream("GET", f"/api/scans/{scan_id}/events") as r:
+        assert r.status_code == 200
+        assert r.headers["content-type"].startswith("text/event-stream")
+        body = r.read().decode()
+
+    names = _sse_event_names(body)
+    assert names[0] == "snapshot"
+    assert "progress" in names
+    assert names[-1] == "completed"
+
+
+def test_scan_events_replays_terminal_state_for_finished_scan(client):
+    """Connecting after completion yields a snapshot + completed event, no hang."""
+    response = client.post("/api/scans", json={"profile": "baseline", "ecosystems": ["npm"]})
+    assert response.status_code == 202
+    scan_id = response.json()["id"]
+
+    terminal = _wait_for_terminal(client, scan_id)
+    assert terminal is not None, "background scan never reached a terminal state"
+    assert terminal["status"] == "completed"
+
+    with client.stream("GET", f"/api/scans/{scan_id}/events") as r:
+        assert r.status_code == 200
+        body = r.read().decode()
+
+    assert _sse_event_names(body) == ["snapshot", "completed"]
+
+
+def test_scan_events_deliver_progress_payload(client, monkeypatch, tmp_path):
+    """Progress events carry the running package count as a JSON payload."""
+    release = tmp_path / "release"
+
+    async def counting_run_scan(request, ndjson_path, on_progress=None):
+        if on_progress:
+            on_progress(7)
+        while not release.exists():
+            await asyncio.sleep(0.01)
+        return (
+            ScanSummary(
+                total_packages=7,
+                ecosystems_found=1,
+                findings_count=0,
+                ecosystem_counts={"npm": 7},
+            ),
+            str(ndjson_path),
+        )
+
+    monkeypatch.setattr("bumblebee_gui.main.run_scan", counting_run_scan)
+
+    scan_id = client.post("/api/scans", json={"profile": "baseline"}).json()["id"]
+    threading.Thread(
+        target=lambda: (time.sleep(0.5), release.touch()), daemon=True
+    ).start()
+
+    with client.stream("GET", f"/api/scans/{scan_id}/events") as r:
+        body = r.read().decode()
+
+    progress_values = [p["packages_found"] for p in _sse_data(body) if p["type"] == "progress"]
+    assert 7 in progress_values
