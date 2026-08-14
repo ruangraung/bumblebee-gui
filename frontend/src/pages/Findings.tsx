@@ -3,76 +3,22 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Download, Search } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { Button } from '@/components/ui/button'
+import { Badge, severityVariant } from '@/components/ui/badge'
 
-// ── Severity config ──
+// ── Severity label ──
 
-const SEVERITY_META: Record<string, { label: string; color: string; order: number }> = {
-  critical: {
-    label: 'CRITICAL',
-    color: 'bg-red-600 text-white dark:bg-red-700',
-    order: 0,
-  },
-  high: {
-    label: 'HIGH',
-    color: 'bg-orange-500 text-white dark:bg-orange-600',
-    order: 1,
-  },
-  medium: {
-    label: 'MEDIUM',
-    color: 'bg-yellow-500 text-white dark:bg-yellow-600',
-    order: 2,
-  },
-  low: {
-    label: 'LOW',
-    color: 'bg-blue-500 text-white dark:bg-blue-600',
-    order: 3,
-  },
-  info: {
-    label: 'INFO',
-    color: 'bg-gray-400 text-white dark:bg-gray-500',
-    order: 4,
-  },
-}
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'border-l-red-600',
-  high: 'border-l-orange-500',
-  medium: 'border-l-yellow-500',
-  low: 'border-l-blue-500',
-  info: 'border-l-gray-400',
-}
-
-function getSeverityMeta(severity: string) {
-  const key = severity.toLowerCase()
-  return (
-    SEVERITY_META[key] ?? {
-      label: severity.toUpperCase(),
-      color: 'bg-gray-400 text-white dark:bg-gray-500',
-      order: 99,
-    }
-  )
-}
-
-function getSeverityBorderColor(severity: string): string {
-  return SEVERITY_COLORS[severity.toLowerCase()] ?? 'border-l-gray-400'
-}
-
-// ── Ecosystem badge colors (matching Results page) ──
-
-function ecosystemColor(eco: string): string {
-  const map: Record<string, string> = {
-    npm: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
-    pypi: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    cargo: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    go: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-    maven: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200',
-    nuget: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
-    gem: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
+function severityLabel(severity: string): string {
+  const meta: Record<string, string> = {
+    critical: 'CRITICAL',
+    high: 'HIGH',
+    medium: 'MEDIUM',
+    low: 'LOW',
+    info: 'INFO',
   }
-  return map[eco] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+  return meta[severity.toLowerCase()] ?? severity.toUpperCase()
 }
 
-// ── Export helpers ──
+// ── Export helper ──
 
 function escapeCSV(value: string): string {
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {
@@ -99,69 +45,59 @@ export default function Findings() {
   const [ecosystemFilter, setEcosystemFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState<string>('')
 
-  // Resolve the scan to display: explicit param or latest with findings
   const activeScan = useMemo(() => {
     if (scanId) {
       return scans.find((s) => s.id === Number(scanId)) ?? null
     }
-    // Prefer latest completed scan with findings
     const withFindings = scans.filter(
       (s) => s.status === 'completed' && (s.summary?.findings_count ?? 0) > 0
     )
     if (withFindings.length > 0) return withFindings[0]
-    // Fall back to latest completed scan
     const completed = scans.filter((s) => s.status === 'completed')
     if (completed.length > 0) return completed[0]
     return scans[0] ?? null
   }, [scans, scanId])
 
-  // Load scans list on mount
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
-  // Fetch findings once the scan has completed (running scans have no data file yet)
   useEffect(() => {
     if (activeScan && activeScan.status === 'completed') {
       fetchFindings(activeScan.id)
     }
   }, [activeScan, fetchFindings])
 
-  // Derive unique ecosystems from findings
   const ecosystems = useMemo(() => {
     const set = new Set(findings.map((f) => f.ecosystem))
     return Array.from(set).sort()
   }, [findings])
 
-  // Derive unique severities from findings
   const severities = useMemo(() => {
+    const order: Record<string, number> = {
+      critical: 0,
+      high: 1,
+      medium: 2,
+      low: 3,
+      info: 4,
+    }
     const set = new Set(findings.map((f) => f.severity.toLowerCase()))
-    return Array.from(set).sort((a, b) => {
-      const aOrder = getSeverityMeta(a).order
-      const bOrder = getSeverityMeta(b).order
-      return aOrder - bOrder
-    })
+    return Array.from(set).sort((a, b) => (order[a] ?? 99) - (order[b] ?? 99))
   }, [findings])
 
-  // Filter + sort by severity
   const filtered = useMemo(() => {
     let result = [...findings]
 
-    // Severity filter
     if (severityFilter !== 'all') {
       result = result.filter(
         (f) => f.severity.toLowerCase() === severityFilter.toLowerCase()
       )
     }
-
-    // Ecosystem filter
     if (ecosystemFilter !== 'all') {
       result = result.filter(
         (f) => f.ecosystem.toLowerCase() === ecosystemFilter.toLowerCase()
       )
     }
-
-    // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
       result = result.filter(
@@ -174,17 +110,17 @@ export default function Findings() {
       )
     }
 
-    // Sort by severity (critical first)
-    result.sort((a, b) => {
-      const aOrder = getSeverityMeta(a.severity).order
-      const bOrder = getSeverityMeta(b.severity).order
-      return aOrder - bOrder
-    })
+    const order: Record<string, number> = {
+      critical: 0,
+      high: 1,
+      medium: 2,
+      low: 3,
+      info: 4,
+    }
+    result.sort((a, b) => (order[a.severity.toLowerCase()] ?? 99) - (order[b.severity.toLowerCase()] ?? 99))
 
     return result
   }, [findings, severityFilter, ecosystemFilter, searchQuery])
-
-  // ── Export helpers ──
 
   const exportJSON = useCallback(() => {
     const blob = new Blob([JSON.stringify(filtered, null, 2)], {
@@ -222,75 +158,54 @@ export default function Findings() {
     URL.revokeObjectURL(url)
   }, [filtered, activeScan])
 
-  // ── Error state ──
-
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="text-destructive font-medium mb-2">Failed to load findings</p>
-        <p className="text-sm text-muted-foreground mb-4">{error}</p>
-        <Button variant="outline" onClick={clearError}>
-          Dismiss
-        </Button>
+        <p className="mb-2 font-medium text-destructive">Failed to load findings</p>
+        <p className="mb-4 text-sm text-muted-foreground">{error}</p>
+        <Button variant="outline" onClick={clearError}>Dismiss</Button>
       </div>
     )
   }
 
-  // ── Empty states ──
-
   if (!loading && scans.length === 0) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Findings</h1>
-        <div className="flex flex-col items-center justify-center py-20">
-          <AlertTriangle className="h-16 w-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold">No exposure scans yet</h2>
-          <p className="text-muted-foreground mt-2">
-            Run a scan with an exposure catalog to see findings here.
-          </p>
-        </div>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
+        <EmptyState icon message="Run a scan with an exposure catalog to see findings here." />
       </div>
     )
   }
 
   if (!loading && activeScan && findings.length === 0) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Findings</h1>
-        <div className="flex flex-col items-center justify-center py-20">
-          <AlertTriangle className="h-16 w-16 text-muted-foreground mb-4" />
-          <h2 className="text-xl font-semibold">No findings</h2>
-          <p className="text-muted-foreground mt-2">
-            No exposure matches were found in this scan.
-          </p>
-        </div>
+      <div className="mx-auto max-w-5xl space-y-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
+        <EmptyState icon message="No exposure matches were found in this scan." />
       </div>
     )
   }
 
-  // ── Main render ──
-
   return (
-    <div className="space-y-6">
-      {/* ── Header ── */}
-      <h1 className="text-2xl font-bold">Findings</h1>
+    <div className="mx-auto max-w-5xl space-y-6">
+      {/* Header */}
+      <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
 
-      {/* ── Summary banner ── */}
+      {/* Summary banner */}
       {!loading && filtered.length > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-          <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+        <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
           <p className="text-sm">
-            <span className="font-semibold">{filtered.length}</span>{' '}
-            {filtered.length === 1 ? 'package matches' : 'packages match'} your
-            exposure catalog
+            <span className="font-mono font-medium">{filtered.length}</span>{' '}
+            {filtered.length === 1 ? 'package' : 'packages'} match your exposure
+            catalog
           </p>
         </div>
       )}
 
-      {/* ── Filters bar ── */}
+      {/* Filters */}
       {(findings.length > 0 || loading) && (
         <div className="flex flex-wrap items-center gap-3">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -302,112 +217,107 @@ export default function Findings() {
             />
           </div>
 
-          {/* Severity dropdown */}
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="all">All severities</option>
+            <option value="all">all severities</option>
             {severities.map((s) => (
-              <option key={s} value={s}>
-                {getSeverityMeta(s).label}
-              </option>
+              <option key={s} value={s}>{severityLabel(s)}</option>
             ))}
           </select>
 
-          {/* Ecosystem dropdown */}
           <select
             value={ecosystemFilter}
             onChange={(e) => setEcosystemFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 rounded-md border border-input bg-background px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="all">All ecosystems</option>
+            <option value="all">all ecosystems</option>
             {ecosystems.map((eco) => (
-              <option key={eco} value={eco}>
-                {eco}
-              </option>
+              <option key={eco} value={eco}>{eco}</option>
             ))}
           </select>
         </div>
       )}
 
-      {/* ── Loading ── */}
+      {/* Loading */}
       {loading && findings.length === 0 ? (
         <div className="flex items-center justify-center py-24">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       ) : filtered.length === 0 && findings.length > 0 ? (
-        /* ── No matches after filtering ── */
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             No findings match your current filters.
           </p>
         </div>
       ) : (
-        /* ── Findings list ── */
         <div className="space-y-3">
-          {filtered.map((finding, i) => {
-            const meta = getSeverityMeta(finding.severity)
-            const borderColor = getSeverityBorderColor(finding.severity)
-
-            return (
-              <div
-                key={`${finding.package_name}-${finding.version}-${finding.catalog_id}-${i}`}
-                className={`rounded-lg border border-border bg-card p-4 border-l-4 ${borderColor}`}
-              >
-                {/* Severity badge + package header */}
-                <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span
-                    className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${meta.color}`}
-                  >
-                    {meta.label}
-                  </span>
-                  <span className="font-semibold text-sm">
-                    {finding.package_name} {finding.version}
-                  </span>
-                  <span
-                    className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${ecosystemColor(finding.ecosystem)}`}
-                  >
-                    {finding.ecosystem}
-                  </span>
-                </div>
-
-                {/* Catalog info + evidence */}
-                {finding.catalog_id && (
-                  <p className="text-sm font-medium text-foreground mb-1">
-                    {finding.catalog_id} — {finding.catalog_name}
-                  </p>
-                )}
-                {finding.evidence && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Evidence: {finding.evidence}
-                  </p>
-                )}
-                {finding.source_file && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Source: {finding.source_file}
-                  </p>
-                )}
+          {filtered.map((finding, i) => (
+            <div
+              key={`${finding.package_name}-${finding.version}-${finding.catalog_id}-${i}`}
+              className="rounded-lg border border-border bg-card p-4"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={severityVariant(finding.severity)}>
+                  {severityLabel(finding.severity)}
+                </Badge>
+                <span className="font-mono text-sm font-medium">
+                  {finding.package_name}@{finding.version}
+                </span>
+                <Badge variant="neutral" className="font-mono">
+                  {finding.ecosystem}
+                </Badge>
               </div>
-            )
-          })}
+
+              {finding.catalog_id && (
+                <p className="mt-2.5 text-sm text-muted-foreground">
+                  <span className="font-mono text-foreground">{finding.catalog_id}</span>
+                  {finding.catalog_name ? ` — ${finding.catalog_name}` : ''}
+                </p>
+              )}
+              {finding.evidence && (
+                <p className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs leading-relaxed text-muted-foreground">
+                  {finding.evidence}
+                </p>
+              )}
+              {finding.source_file && (
+                <p className="mt-2 font-mono text-xs text-muted-foreground">
+                  src: {finding.source_file}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      {/* ── Export buttons ── */}
+      {/* Export */}
       {filtered.length > 0 && (
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportJSON}>
             <Download className="mr-1.5 h-4 w-4" />
-            Export Findings JSON
+            JSON
           </Button>
           <Button variant="outline" size="sm" onClick={exportCSV}>
             <Download className="mr-1.5 h-4 w-4" />
-            Export Findings CSV
+            CSV
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+function EmptyState({ icon, message }: { icon?: boolean; message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
+      {icon && (
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
+          <AlertTriangle className="h-6 w-6" />
+        </div>
+      )}
+      <p className="mt-3 text-sm text-muted-foreground">{message}</p>
     </div>
   )
 }
