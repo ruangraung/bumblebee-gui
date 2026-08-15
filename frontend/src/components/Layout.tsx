@@ -22,7 +22,7 @@ export default function Layout() {
         {/* Header */}
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-6">
           <p className="font-mono text-xs text-muted-foreground">
-            bumblebee<span className="text-muted-foreground/50"> / </span>
+            Bumblebee GUI<span className="text-muted-foreground/50"> / </span>
             <span className="text-foreground">{title}</span>
           </p>
           <ThemeToggle />

@@ -60,9 +60,9 @@ export default function Sidebar() {
           <Bug className="h-4 w-4" />
         </div>
         <div className="leading-tight">
-          <p className="text-sm font-semibold tracking-tight">Bumblebee</p>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            supply-chain
+          <p className="text-sm font-semibold tracking-tight">Bumblebee GUI</p>
+          <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">
+            A web UI for the Bumblebee supply-chain scanner
           </p>
         </div>
       </div>

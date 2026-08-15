@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { AlertTriangle, Download, Search } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
+import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge, severityVariant } from '@/components/ui/badge'
 
@@ -171,7 +172,10 @@ export default function Findings() {
   if (!loading && scans.length === 0) {
     return (
       <div className="mx-auto max-w-5xl space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
+        <PageHeader
+          title="Findings"
+          description="Packages matched against your exposure catalog, ranked by severity."
+        />
         <EmptyState icon message="Run a scan with an exposure catalog to see findings here." />
       </div>
     )
@@ -180,7 +184,10 @@ export default function Findings() {
   if (!loading && activeScan && findings.length === 0) {
     return (
       <div className="mx-auto max-w-5xl space-y-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
+        <PageHeader
+          title="Findings"
+          description="Packages matched against your exposure catalog, ranked by severity."
+        />
         <EmptyState icon message="No exposure matches were found in this scan." />
       </div>
     )
@@ -189,7 +196,10 @@ export default function Findings() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
-      <h1 className="text-2xl font-semibold tracking-tight">Findings</h1>
+      <PageHeader
+        title="Findings"
+        description="Packages matched against your exposure catalog, ranked by severity."
+      />
 
       {/* Summary banner */}
       {!loading && filtered.length > 0 && (
