@@ -36,7 +36,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: "0.0.0.0",
+    host: "127.0.0.1", // loopback-only for host-run dev; the compose container overrides via `--host 0.0.0.0` (Dockerfile.frontend)
     // Allow access via the tailnet hostname (tailscale serve → ts.net) —
     // Vite's DNS-rebinding protection blocks non-localhost hosts by default.
     allowedHosts: [".ts.net"],
