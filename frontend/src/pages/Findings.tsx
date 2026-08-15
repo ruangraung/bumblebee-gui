@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Download, Search } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
+import ScanPicker from '@/components/ScanPicker'
 import { Button } from '@/components/ui/button'
 import { Badge, severityVariant } from '@/components/ui/badge'
 
@@ -191,6 +192,7 @@ export default function Findings() {
           title="Findings"
           description="Packages matched against your exposure catalog, ranked by severity."
         />
+        <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
         <EmptyState icon message="No exposure matches were found in this scan." />
       </div>
     )
@@ -203,6 +205,9 @@ export default function Findings() {
         title="Findings"
         description="Packages matched against your exposure catalog, ranked by severity."
       />
+
+      {/* Scan switcher */}
+      <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
 
       {/* Summary banner */}
       {!loading && filtered.length > 0 && (

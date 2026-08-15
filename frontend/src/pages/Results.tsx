@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Download, Copy, Search, ChevronLeft, ChevronRight, X, Scan } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
+import ScanPicker from '@/components/ScanPicker'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Badge } from '@/components/ui/badge'
@@ -199,6 +200,9 @@ export default function Results() {
             : 'no scan selected — run a scan first'}
         </p>
       </div>
+
+      {/* Scan switcher */}
+      <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/results" />
 
       {/* ── Filters bar ── */}
       {packages.length > 0 && (
