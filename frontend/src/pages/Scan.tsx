@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
+import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ScanRequest } from '@/lib/api'
@@ -198,12 +199,10 @@ export default function Scan() {
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">New scan</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Configure and trigger a supply-chain security scan.
-        </p>
-      </div>
+      <PageHeader
+        title="New scan"
+        description="Pick ecosystems and root directories, then start a supply-chain scan."
+      />
 
       {/* Quick Presets */}
       <section className="space-y-3">

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Package, Layers, AlertTriangle, Clock, Scan } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
+import { PageHeader } from '@/components/PageHeader'
 import { StatsCard } from '@/components/StatsCard'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Button } from '@/components/ui/button'
@@ -23,14 +24,12 @@ export default function Dashboard() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       {/* Header */}
-      <div className="flex items-end justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Supply-chain security at a glance.
-          </p>
-        </div>
-        <Button onClick={() => navigate('/scan')}>
+      <div className="flex items-end justify-between gap-6">
+        <PageHeader
+          title="Dashboard"
+          description="A web interface for the Bumblebee CLI supply-chain scanner — inventory dependencies and flag known-vulnerable packages. Your latest scan, summarized."
+        />
+        <Button onClick={() => navigate('/scan')} className="shrink-0">
           <Scan className="mr-1.5 h-4 w-4" />
           New scan
         </Button>

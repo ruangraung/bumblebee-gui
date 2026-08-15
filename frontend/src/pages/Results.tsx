@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Download, Copy, Search, ChevronLeft, ChevronRight, X, Scan } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
+import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Badge } from '@/components/ui/badge'
@@ -183,7 +184,10 @@ export default function Results() {
     <div className="mx-auto max-w-5xl space-y-6">
       {/* ── Header ── */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Results</h1>
+        <PageHeader
+          title="Results"
+          description="The packages a scan detected — search, filter, sort, and export."
+        />
         <p className="mt-1 font-mono text-sm text-muted-foreground">
           {activeScan
             ? activeScan.status === 'completed'

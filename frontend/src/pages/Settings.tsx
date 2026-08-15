@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Sun, Moon, Monitor, Trash2, RefreshCw, Plus, X, FolderOpen, Pencil } from 'lucide-react'
+import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -78,9 +79,10 @@ export default function Settings() {
   // ---- Render --------------------------------------------------------------
   return (
     <div className="mx-auto max-w-3xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Appearance, scan presets, and data management."
+      />
 
       {/* Appearance */}
       <Section title="Appearance">
