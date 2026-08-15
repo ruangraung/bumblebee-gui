@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { AlertTriangle, Download, Search } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
+import ScanPicker from '@/components/ScanPicker'
 import { Button } from '@/components/ui/button'
 import { Badge, severityVariant } from '@/components/ui/badge'
 
@@ -34,7 +35,7 @@ export default function Findings() {
   const { scanId } = useParams<{ scanId?: string }>()
   const {
     scans,
-    findings,
+    findingsByScan,
     loading,
     error,
     fetchScans,
@@ -59,15 +60,18 @@ export default function Findings() {
     return scans[0] ?? null
   }, [scans, scanId])
 
+  // Per-scan cache read — empty until that scan's findings are fetched.
+  const findings = findingsByScan[activeScan?.id ?? -1] ?? []
+
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
   useEffect(() => {
-    if (activeScan && activeScan.status === 'completed') {
+    if (activeScan && activeScan.status === 'completed' && !findingsByScan[activeScan.id]) {
       fetchFindings(activeScan.id)
     }
-  }, [activeScan, fetchFindings])
+  }, [activeScan, findingsByScan, fetchFindings])
 
   const ecosystems = useMemo(() => {
     const set = new Set(findings.map((f) => f.ecosystem))
@@ -188,6 +192,7 @@ export default function Findings() {
           title="Findings"
           description="Packages matched against your exposure catalog, ranked by severity."
         />
+        <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
         <EmptyState icon message="No exposure matches were found in this scan." />
       </div>
     )
@@ -200,6 +205,9 @@ export default function Findings() {
         title="Findings"
         description="Packages matched against your exposure catalog, ranked by severity."
       />
+
+      {/* Scan switcher */}
+      <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
 
       {/* Summary banner */}
       {!loading && filtered.length > 0 && (

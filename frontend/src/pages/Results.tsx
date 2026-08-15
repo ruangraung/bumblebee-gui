@@ -1,8 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, Copy, Search, ChevronLeft, ChevronRight, X, Scan } from 'lucide-react'
+import { Download, Copy, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
+import ScanPicker from '@/components/ScanPicker'
+import { ScanningState } from '@/components/ScanningState'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Badge } from '@/components/ui/badge'
@@ -16,7 +18,7 @@ export default function Results() {
   const navigate = useNavigate()
   const {
     scans,
-    packages,
+    packagesByScan,
     loading,
     error,
     fetchScans,
@@ -42,15 +44,18 @@ export default function Results() {
     return scans[0] ?? null
   }, [scans, scanId])
 
+  // Per-scan cache read — empty until that scan's results are fetched.
+  const packages = packagesByScan[activeScan?.id ?? -1] ?? []
+
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
   useEffect(() => {
-    if (activeScan && activeScan.status === 'completed') {
+    if (activeScan && activeScan.status === 'completed' && !packagesByScan[activeScan.id]) {
       fetchPackages(activeScan.id)
     }
-  }, [activeScan, fetchPackages])
+  }, [activeScan, packagesByScan, fetchPackages])
 
   const scanStatus = activeScan?.status
   useEffect(() => {
@@ -196,6 +201,9 @@ export default function Results() {
             : 'no scan selected — run a scan first'}
         </p>
       </div>
+
+      {/* Scan switcher */}
+      <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/results" />
 
       {/* ── Filters bar ── */}
       {packages.length > 0 && (
@@ -366,38 +374,6 @@ function Loading() {
   return (
     <div className="flex items-center justify-center py-24">
       <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-    </div>
-  )
-}
-
-function ScanningState({
-  packagesFound,
-  onCancel,
-}: {
-  packagesFound?: number
-  onCancel: () => void
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
-      <div className="relative">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/20" />
-        <span className="relative flex h-10 w-10 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary">
-          <Scan className="h-5 w-5" />
-        </span>
-      </div>
-      <p className="mt-4 text-sm font-medium">Scan in progress</p>
-      <p className="mt-1 font-mono text-xs text-muted-foreground">
-        {typeof packagesFound === 'number' && packagesFound > 0
-          ? `${packagesFound.toLocaleString()} packages found so far`
-          : 'discovering packages…'}
-      </p>
-      <div className="mt-6 h-1 w-64 overflow-hidden rounded-full bg-muted">
-        <div className="h-full w-1/3 animate-scan-sweep rounded-full bg-primary" />
-      </div>
-      <Button variant="destructive" size="sm" className="mt-6" onClick={onCancel}>
-        <X className="mr-1.5 h-4 w-4" />
-        Cancel scan
-      </Button>
     </div>
   )
 }

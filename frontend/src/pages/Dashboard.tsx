@@ -1,25 +1,36 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, Layers, AlertTriangle, Clock, Scan } from 'lucide-react'
+import { Package, Layers, AlertTriangle, Clock, Scan, X } from 'lucide-react'
 import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
 import { StatsCard } from '@/components/StatsCard'
 import { EcosystemChart } from '@/components/EcosystemChart'
+import { ScanPulseRing, ScanSweepBar } from '@/components/ScanningState'
 import { Button } from '@/components/ui/button'
 import { Badge, statusVariant } from '@/components/ui/badge'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { fetchScans, scans, loading } = useScanStore()
+  const { fetchScans, pollScanList, deleteScan, scans, loading } = useScanStore()
 
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
-  const lastScan = scans.length > 0 ? scans[0] : undefined
+  // Live refresh while anything runs; auto-stops when all scans are terminal.
+  useEffect(() => pollScanList(3000), [pollScanList])
+
+  // Stats summarize the latest COMPLETED scan (fall back to the newest row
+  // when nothing has finished yet — e.g. the very first scan still running).
+  const lastScan = useMemo(() => {
+    const completed = scans.filter((s) => s.status === 'completed')
+    return completed.length > 0 ? completed[0] : scans[0]
+  }, [scans])
   const totalPackages = lastScan?.summary?.total_packages ?? 0
   const ecosystems = lastScan?.summary?.ecosystems_found ?? 0
   const findingsCount = lastScan?.summary?.findings_count ?? 0
+
+  const runningScans = scans.filter((s) => s.status === 'running' || s.status === 'pending')
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
@@ -57,6 +68,53 @@ export default function Dashboard() {
               icon={<AlertTriangle className="h-4 w-4" />}
             />
           </div>
+
+          {/* Running now */}
+          {runningScans.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="overline">Running now</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {runningScans.map((scan) => (
+                  <div
+                    key={scan.id}
+                    className="flex items-center gap-4 rounded-lg border bg-card px-4 py-3"
+                  >
+                    <ScanPulseRing />
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/results/${scan.id}`)}
+                        className="w-full text-left"
+                      >
+                        <p className="text-sm font-medium">
+                          <span className="font-mono text-xs text-muted-foreground">
+                            #{scan.id}
+                          </span>{' '}
+                          <span className="font-mono">{scan.profile}</span>
+                        </p>
+                        <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                          {typeof scan.packages_found === 'number' &&
+                          scan.packages_found > 0
+                            ? `${scan.packages_found.toLocaleString()} packages found so far`
+                            : 'discovering packages…'}
+                        </p>
+                      </button>
+                      <ScanSweepBar className="mt-2 h-1 w-full" />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => deleteScan(scan.id)}
+                    >
+                      <X className="mr-1 h-3.5 w-3.5" />
+                      Cancel
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Last scan line */}
           {lastScan && (

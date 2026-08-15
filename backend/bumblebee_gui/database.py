@@ -100,7 +100,7 @@ async def get_scans(limit: int = 20) -> List[ScanRecord]:
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "SELECT * FROM scans ORDER BY timestamp DESC LIMIT ?", (limit,)
+            "SELECT * FROM scans ORDER BY timestamp DESC, id DESC LIMIT ?", (limit,)
         )
         rows = await cursor.fetchall()
         return [
