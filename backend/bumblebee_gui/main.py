@@ -52,6 +52,26 @@ def _cleanup_scan(scan_id: int) -> None:
     _scan_queues.pop(scan_id, None)
 
 
+def _attach_packages_found(scan: ScanRecord) -> ScanRecord:
+    """Compute the live `packages_found` field for a scan record.
+
+    Running scans report packages discovered so far (counted from the partial
+    NDJSON file); completed scans report the final total from their summary.
+    Findings-only scans report 0 until done — findings are only counted in
+    the summary. Shared by the detail and list endpoints so the dashboard
+    can render concurrent-scan progress from one cheap list call.
+    """
+    packages_found = None
+    if scan.status == ScanStatus.completed and scan.summary:
+        packages_found = scan.summary.total_packages
+    elif scan.status == ScanStatus.running and scan.ndjson_path:
+        packages_found = count_packages(Path(scan.ndjson_path))
+
+    if packages_found is not None:
+        return scan.model_copy(update={"packages_found": packages_found})
+    return scan
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: initialize DB on startup and recover stale rows."""
@@ -151,8 +171,9 @@ async def create_scan(request: ScanRequest):
 
 @app.get("/api/scans", response_model=list[ScanRecord])
 async def list_scans(limit: int = Query(default=20, ge=1, le=100)):
-    """List recent scans."""
-    return await get_scans(limit=limit)
+    """List recent scans, with live progress for any that are running."""
+    scans = await get_scans(limit=limit)
+    return [_attach_packages_found(scan) for scan in scans]
 
 
 @app.get("/api/scans/{scan_id}", response_model=ScanRecord)
@@ -162,18 +183,7 @@ async def get_scan_detail(scan_id: int):
     if not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
 
-    # Live progress: packages discovered so far while running; the final total
-    # once completed. Findings-only scans report 0 until done — findings are
-    # only counted in the summary.
-    packages_found = None
-    if scan.status == ScanStatus.completed and scan.summary:
-        packages_found = scan.summary.total_packages
-    elif scan.status == ScanStatus.running and scan.ndjson_path:
-        packages_found = count_packages(Path(scan.ndjson_path))
-
-    if packages_found is not None:
-        scan = scan.model_copy(update={"packages_found": packages_found})
-    return scan
+    return _attach_packages_found(scan)
 
 
 def _sse_event(payload: dict) -> str:

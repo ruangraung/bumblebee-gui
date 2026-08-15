@@ -7,6 +7,7 @@ cancellation, and Server-Sent Events semantics are covered too.
 """
 
 import asyncio
+import aiosqlite
 import json
 import threading
 import time
@@ -164,6 +165,78 @@ def test_scan_progress_reports_packages_found(client, monkeypatch, tmp_path):
     assert terminal is not None
     assert terminal["status"] == "completed"
     assert terminal["packages_found"] == 3
+
+
+def test_list_scans_includes_packages_found_for_running(client, monkeypatch, tmp_path):
+    """The scan LIST reports live packages_found for running scans and the
+    final total for completed ones — the dashboard's concurrent-scan view
+    depends on it (no per-scan detail requests needed)."""
+    release = tmp_path / "release"
+
+    async def slow_run_scan(request, ndjson_path, on_progress=None):
+        Path(ndjson_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(ndjson_path, "w", encoding="utf-8") as f:
+            f.write('{"record_type": "package", "package_name": "a", "ecosystem": "npm"}\n')
+            f.write('{"record_type": "package", "package_name": "b", "ecosystem": "npm"}\n')
+        while not release.exists():
+            await asyncio.sleep(0.01)
+        return (
+            ScanSummary(
+                total_packages=2,
+                ecosystems_found=1,
+                findings_count=0,
+                ecosystem_counts={"npm": 2},
+            ),
+            str(ndjson_path),
+        )
+
+    monkeypatch.setattr("bumblebee_gui.main.run_scan", slow_run_scan)
+
+    response = client.post("/api/scans", json={"profile": "baseline"})
+    assert response.status_code == 202
+    scan_id = response.json()["id"]
+
+    # While running: the list must expose live progress (2 packages written).
+    listed = None
+    for _ in range(200):
+        rows = client.get("/api/scans").json()
+        listed = next((r for r in rows if r["id"] == scan_id), None)
+        if listed and listed["status"] == "running" and listed["packages_found"] == 2:
+            break
+        time.sleep(0.01)
+    assert listed is not None, "scan never appeared in the list with live progress"
+    assert listed["status"] == "running"
+    assert listed["packages_found"] == 2
+
+    release.touch()
+    terminal = _wait_for_terminal(client, scan_id)
+    assert terminal is not None
+    assert terminal["status"] == "completed"
+
+    rows = client.get("/api/scans").json()
+    completed = next(r for r in rows if r["id"] == scan_id)
+    assert completed["packages_found"] == 2
+
+
+def test_list_scans_tiebreaks_equal_timestamps_by_id_desc(client):
+    """Scan rows with identical timestamps order by id DESC — deterministic
+    'latest' semantics for the dashboard under concurrent creation."""
+
+    async def insert_two_with_same_timestamp():
+        ts = "2026-08-15T10:00:00+00:00"
+        async with aiosqlite.connect(database.DB_PATH) as db:
+            for _ in range(2):
+                await db.execute(
+                    "INSERT INTO scans (timestamp, profile, status) VALUES (?, ?, ?)",
+                    (ts, "baseline", "completed"),
+                )
+            await db.commit()
+
+    asyncio.run(insert_two_with_same_timestamp())
+
+    rows = client.get("/api/scans").json()
+    ids = [r["id"] for r in rows[:2]]
+    assert ids == sorted(ids, reverse=True), f"expected id DESC, got {ids}"
 
 
 def test_delete_running_scan_cancels_task_and_cleans_up(client, monkeypatch, tmp_path):
