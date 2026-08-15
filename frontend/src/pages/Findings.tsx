@@ -34,7 +34,7 @@ export default function Findings() {
   const { scanId } = useParams<{ scanId?: string }>()
   const {
     scans,
-    findings,
+    findingsByScan,
     loading,
     error,
     fetchScans,
@@ -59,15 +59,18 @@ export default function Findings() {
     return scans[0] ?? null
   }, [scans, scanId])
 
+  // Per-scan cache read — empty until that scan's findings are fetched.
+  const findings = findingsByScan[activeScan?.id ?? -1] ?? []
+
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
   useEffect(() => {
-    if (activeScan && activeScan.status === 'completed') {
+    if (activeScan && activeScan.status === 'completed' && !findingsByScan[activeScan.id]) {
       fetchFindings(activeScan.id)
     }
-  }, [activeScan, fetchFindings])
+  }, [activeScan, findingsByScan, fetchFindings])
 
   const ecosystems = useMemo(() => {
     const set = new Set(findings.map((f) => f.ecosystem))

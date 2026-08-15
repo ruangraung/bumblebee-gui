@@ -16,7 +16,7 @@ export default function Results() {
   const navigate = useNavigate()
   const {
     scans,
-    packages,
+    packagesByScan,
     loading,
     error,
     fetchScans,
@@ -42,15 +42,18 @@ export default function Results() {
     return scans[0] ?? null
   }, [scans, scanId])
 
+  // Per-scan cache read — empty until that scan's results are fetched.
+  const packages = packagesByScan[activeScan?.id ?? -1] ?? []
+
   useEffect(() => {
     fetchScans()
   }, [fetchScans])
 
   useEffect(() => {
-    if (activeScan && activeScan.status === 'completed') {
+    if (activeScan && activeScan.status === 'completed' && !packagesByScan[activeScan.id]) {
       fetchPackages(activeScan.id)
     }
-  }, [activeScan, fetchPackages])
+  }, [activeScan, packagesByScan, fetchPackages])
 
   const scanStatus = activeScan?.status
   useEffect(() => {
