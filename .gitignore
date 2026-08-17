@@ -80,3 +80,6 @@ coverage.xml
 
 # Internal docs (do not publish)
 docs/
+
+# Hermes workspace notes (never commit to public repo)
+.hermes/
