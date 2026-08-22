@@ -129,6 +129,9 @@ export default function Scan() {
   // ---- Derived warnings --------------------------------------------------
   const usesHomeRoot = roots.some((r) => r === '~' || r.startsWith('~/'))
   const showHomeRootWarning = usesHomeRoot && profile !== 'deep'
+  // The bumblebee CLI rejects `deep` without explicit roots by design
+  // (incident-response profile refuses to auto-configure).
+  const deepNeedsRoots = profile === 'deep' && roots.length === 0
 
   // ---- Preset application ------------------------------------------------
   function applyPreset(preset: Preset) {
@@ -136,6 +139,10 @@ export default function Scan() {
     setEcosystems(preset.ecosystems)
     setRoots(preset.roots)
     setActivePreset(preset.label)
+    // Land users where the missing input is if the preset needs roots.
+    if (preset.profile === 'deep' && preset.roots.length === 0) {
+      setRootsOpen(true)
+    }
   }
 
   // ---- Ecosystem toggles -------------------------------------------------
@@ -173,6 +180,14 @@ export default function Scan() {
 
     if (ecosystems.length === 0) {
       setValidationError('Select at least one ecosystem.')
+      return
+    }
+
+    if (profile === 'deep' && roots.length === 0) {
+      setValidationError(
+        'The deep profile requires at least one root directory. Add one under "Root directories".',
+      )
+      setRootsOpen(true)
       return
     }
 
@@ -252,6 +267,15 @@ export default function Scan() {
             <option value="deep">deep</option>
           </select>
         </div>
+
+        {/* Deep-profile hint: the CLI requires explicit roots for deep scans */}
+        {deepNeedsRoots && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+            The <strong>deep</strong> profile requires at least one root directory
+            — add one under <em>Root directories</em> below, or the scan will be
+            rejected.
+          </div>
+        )}
 
         {/* Collapsible: Ecosystems */}
         <CollapsibleSection
