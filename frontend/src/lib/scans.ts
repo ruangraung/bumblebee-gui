@@ -37,7 +37,7 @@ export function packagesToFetch(
 // The scan line under the page title: date, profile, and what the scan knows
 // so far. A finished scan reports its own total; a running one reports status.
 export function scanSummaryLine(scan: ScanRecord | null, packageCount: number): string {
-  if (!scan) return 'no scan selected — run a scan first'
+  if (!scan) return 'No scan selected. Run a scan first.'
   const date = scanDateLabel(scan.timestamp)
   if (scan.status === 'completed') {
     const total = scan.summary?.total_packages ?? packageCount
@@ -47,7 +47,7 @@ export function scanSummaryLine(scan: ScanRecord | null, packageCount: number): 
 }
 
 export function scanDateLabel(timestamp?: string): string {
-  if (!timestamp) return '—'
+  if (!timestamp) return 'n/a'
   return new Date(timestamp).toISOString().slice(0, 10)
 }
 

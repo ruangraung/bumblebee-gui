@@ -44,9 +44,9 @@ export function PackagesTable({
                 <Badge variant="neutral" className="font-mono">{pkg.ecosystem}</Badge>
               </td>
               <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.version}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{pkg.source_type ?? '—'}</td>
-              <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.project_path ?? '—'}</td>
-              <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.confidence ?? '—'}</td>
+              <td className="px-4 py-2.5 text-muted-foreground">{pkg.source_type ?? 'n/a'}</td>
+              <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.project_path ?? 'n/a'}</td>
+              <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.confidence ?? 'n/a'}</td>
             </tr>
           ))}
         </tbody>

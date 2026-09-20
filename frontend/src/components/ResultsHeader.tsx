@@ -12,7 +12,7 @@ export function ResultsHeader({ scan, packageCount }: ResultsHeaderProps) {
     <div>
       <PageHeader
         title="Results"
-        description="The packages a scan detected — search, filter, sort, and export."
+        description="Packages the selected scan detected. Search, filter, sort, or export the list."
       />
       <p className="mt-1 font-mono text-sm text-muted-foreground">
         {scanSummaryLine(scan, packageCount)}
