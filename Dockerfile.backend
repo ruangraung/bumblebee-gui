@@ -25,6 +25,25 @@ RUN curl -fsSL "https://github.com/perplexityai/bumblebee/releases/download/v${B
     && rm /tmp/bumblebee.tar.gz \
     && chmod +x /usr/local/bin/bumblebee
 
+# Exposure catalogues.
+#
+# A scan reports nothing unless the scanner has something to compare packages
+# against, so the image carries upstream's threat-intel set. The commit is
+# pinned and every file's sha256 is listed in threat-intel.manifest, because
+# this data decides what gets reported as malicious: it is fetched at build
+# time rather than at run time, and verified before it is installed. It lives
+# outside /app, which the compose setup bind-mounts over during development.
+ARG BUMBLEBEE_THREAT_INTEL_COMMIT=cc57710eeaf685e7b89924a36c8583cad0a378fe
+COPY threat-intel.manifest /tmp/threat-intel.manifest
+RUN mkdir -p /opt/bumblebee/threat-intel \
+    && cd /tmp \
+    && while read -r digest name; do \
+         curl -fsSL "https://raw.githubusercontent.com/perplexityai/bumblebee/${BUMBLEBEE_THREAT_INTEL_COMMIT}/threat_intel/${name}" -o "/tmp/${name}"; \
+       done < /tmp/threat-intel.manifest \
+    && sha256sum -c --strict /tmp/threat-intel.manifest \
+    && cp /tmp/*.json /opt/bumblebee/threat-intel/ \
+    && rm -f /tmp/*.json /tmp/threat-intel.manifest
+
 # Verify installation
 RUN bumblebee version
 

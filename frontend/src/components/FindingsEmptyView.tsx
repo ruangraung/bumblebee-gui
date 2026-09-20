@@ -24,7 +24,7 @@ export function findingsEmptyKind(state: FindingsEmptyState): FindingsEmptyKind 
 }
 
 const EMPTY_MESSAGES: Record<Exclude<FindingsEmptyKind, 'none'>, string> = {
-  'no-scans': 'Run a scan with an exposure catalog to see findings here.',
+  'no-scans': 'Run a scan to see exposure matches here.',
   'no-findings': 'No exposure matches were found in this scan.',
 }
 

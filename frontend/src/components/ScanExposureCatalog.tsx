@@ -17,13 +17,14 @@ export function ScanExposureCatalog({
   return (
     <CollapsibleSection title="Exposure catalog" open={open} onToggle={onToggle}>
       <p className="mb-3 text-sm text-muted-foreground">
-        Cross-reference findings against an exposure catalog file.
+        Findings are matched against the catalogues bundled with the scanner. Set a path to use your
+        own catalog file or directory instead.
       </p>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Path to exposure catalog file"
+        placeholder="Optional: path to a catalog file or directory"
         className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       />
     </CollapsibleSection>

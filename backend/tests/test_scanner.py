@@ -21,14 +21,16 @@ BIN = "/usr/local/bin/bumblebee"
 # ── build_command ────────────────────────────────────────────────────────────
 
 
-def test_build_command_default(monkeypatch):
+def test_build_command_default(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
     cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline))
     assert cmd == [BIN, "scan", "--profile", "baseline", "--max-duration", "10m"]
 
 
-def test_build_command_all_options(monkeypatch):
+def test_build_command_all_options(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
     req = ScanRequest(
         profile=ScanProfile.deep,
         ecosystems=["npm", "pypi"],
@@ -57,8 +59,9 @@ def test_build_command_all_options(monkeypatch):
     ]
 
 
-def test_build_command_no_optional_flags(monkeypatch):
+def test_build_command_no_optional_flags(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
     req = ScanRequest(
         profile=ScanProfile.project,
         ecosystems=None,
@@ -71,8 +74,9 @@ def test_build_command_no_optional_flags(monkeypatch):
     assert cmd == [BIN, "scan", "--profile", "project"]
 
 
-def test_build_command_multiple_roots(monkeypatch):
+def test_build_command_multiple_roots(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
     cmd = scanner.build_command(ScanRequest(profile=ScanProfile.project, roots=["a", "b", "c"]))
     assert cmd == [
         BIN,
@@ -380,3 +384,43 @@ def test_run_scan_cancel_kills_subprocess(monkeypatch, tmp_path):
     time.sleep(0.2)
     size_later = heartbeat.stat().st_size if heartbeat.exists() else 0
     assert size_after == size_later, "subprocess kept running after cancellation"
+
+
+# ── bundled exposure catalogues ──────────────────────────────────────────────
+
+
+def test_bundled_catalog_used_when_the_request_omits_one(monkeypatch, tmp_path):
+    monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path)
+    (tmp_path / "campaign.json").write_text("{}")
+    cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline))
+    assert cmd == [
+        BIN, "scan", "--profile", "baseline",
+        "--exposure-catalog", str(tmp_path),
+        "--max-duration", "10m",
+    ]
+
+
+def test_no_catalog_flag_when_the_bundled_dir_is_absent(monkeypatch, tmp_path):
+    monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
+    cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline))
+    assert cmd == [BIN, "scan", "--profile", "baseline", "--max-duration", "10m"]
+
+
+def test_explicit_catalog_wins_over_the_bundled_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path)
+    (tmp_path / "campaign.json").write_text("{}")
+    req = ScanRequest(profile=ScanProfile.baseline, exposure_catalog="/mine/catalog.json")
+    cmd = scanner.build_command(req)
+    assert cmd[cmd.index("--exposure-catalog") + 1] == "/mine/catalog.json"
+
+
+def test_empty_catalog_string_disables_the_bundled_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path)
+    (tmp_path / "campaign.json").write_text("{}")
+    req = ScanRequest(profile=ScanProfile.baseline, exposure_catalog="")
+    cmd = scanner.build_command(req)
+    assert "--exposure-catalog" not in cmd
