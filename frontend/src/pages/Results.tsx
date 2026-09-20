@@ -1,69 +1,26 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, Copy } from 'lucide-react'
-import { PageHeader } from '@/components/PageHeader'
 import ScanPicker from '@/components/ScanPicker'
-import { ScanningState } from '@/components/ScanningState'
-import { PackagesTable } from '@/components/PackagesTable'
-import { PackageFilters } from '@/components/PackageFilters'
 import { Button } from '@/components/ui/button'
-import { EcosystemChart } from '@/components/EcosystemChart'
+import { PackageFilters } from '@/components/PackageFilters'
+import { ResultsHeader } from '@/components/ResultsHeader'
+import { ResultsBody } from '@/components/ResultsBody'
+import { ResultsSummary } from '@/components/ResultsSummary'
+import { ExportActions } from '@/components/ExportActions'
 import { useActiveScan } from '@/hooks/useActiveScan'
 import { usePackageTable } from '@/hooks/usePackageTable'
-import { downloadTextFile, packagesToCSV, packagesToTSV } from '@/lib/packages'
-import { isInProgress } from '@/lib/scans'
 
 export default function Results() {
   const { scanId } = useParams<{ scanId?: string }>()
   const navigate = useNavigate()
   const { scans, activeScan, packages, loading, error, clearError, cancel } = useActiveScan(scanId)
-  const {
-    search,
-    setSearch,
-    ecosystemFilter,
-    setEcosystemFilter,
-    sortKey,
-    setSortKey,
-    page,
-    setPage,
-    ecosystems,
-    filtered,
-    totalPages,
-    paged,
-    pageStart,
-    pageEnd,
-    pageNumbers,
-  } = usePackageTable(packages)
-  const [copied, setCopied] = useState(false)
+  const table = usePackageTable(packages)
 
   const handleCancel = useCallback(async () => {
     if (!activeScan) return
     await cancel()
     navigate('/')
   }, [activeScan, cancel, navigate])
-
-  const exportJSON = useCallback(() => {
-    downloadTextFile(
-      `packages-${activeScan?.id ?? 'latest'}.json`,
-      JSON.stringify(filtered, null, 2),
-      'application/json',
-    )
-  }, [filtered, activeScan])
-
-  const exportCSV = useCallback(() => {
-    downloadTextFile(`packages-${activeScan?.id ?? 'latest'}.csv`, packagesToCSV(filtered), 'text/csv')
-  }, [filtered, activeScan])
-
-  const copyToClipboard = useCallback(async () => {
-    await navigator.clipboard.writeText(packagesToTSV(filtered))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [filtered])
-
-  const scanDate = activeScan?.timestamp
-    ? new Date(activeScan.timestamp).toISOString().slice(0, 10)
-    : '—'
-  const totalPackages = activeScan?.summary?.total_packages ?? packages.length
 
   if (error) {
     return (
@@ -77,103 +34,24 @@ export default function Results() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <PageHeader
-          title="Results"
-          description="The packages a scan detected — search, filter, sort, and export."
-        />
-        <p className="mt-1 font-mono text-sm text-muted-foreground">
-          {activeScan
-            ? activeScan.status === 'completed'
-              ? `${scanDate} · ${activeScan.profile} · ${totalPackages} packages`
-              : `${scanDate} · ${activeScan.profile} · ${activeScan.status}`
-            : 'no scan selected — run a scan first'}
-        </p>
-      </div>
-
+      <ResultsHeader scan={activeScan} packageCount={packages.length} />
       <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/results" />
 
       {packages.length > 0 && (
         <PackageFilters
-          ecosystems={ecosystems}
-          search={search}
-          onSearchChange={setSearch}
-          ecosystem={ecosystemFilter}
-          onEcosystemChange={setEcosystemFilter}
-          sortKey={sortKey}
-          onSortChange={setSortKey}
+          ecosystems={table.ecosystems}
+          search={table.search}
+          onSearchChange={table.setSearch}
+          ecosystem={table.ecosystemFilter}
+          onEcosystemChange={table.setEcosystemFilter}
+          sortKey={table.sortKey}
+          onSortChange={table.setSortKey}
         />
       )}
 
-      {loading && packages.length === 0 ? (
-        <Loading />
-      ) : !activeScan ? (
-        <EmptyState message="Run a scan to see package results here." />
-      ) : isInProgress(activeScan.status) ? (
-        <ScanningState
-          packagesFound={activeScan.packages_found}
-          onCancel={handleCancel}
-        />
-      ) : activeScan.status === 'failed' ? (
-        <EmptyState message="This scan failed. Check the backend logs and try again." />
-      ) : filtered.length === 0 ? (
-        <EmptyState
-          message={
-            search || ecosystemFilter !== 'all'
-              ? 'No packages match your filters.'
-              : 'No packages found in this scan.'
-          }
-        />
-      ) : (
-        <PackagesTable
-          rows={paged}
-          page={page}
-          totalPages={totalPages}
-          pageNumbers={pageNumbers}
-          range={{ start: pageStart, end: pageEnd, total: filtered.length }}
-          onPageChange={(next) => setPage(Math.min(totalPages, Math.max(1, next)))}
-        />
-      )}
-
-      {filtered.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportJSON}>
-            <Download className="mr-1.5 h-4 w-4" />
-            JSON
-          </Button>
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download className="mr-1.5 h-4 w-4" />
-            CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={copyToClipboard}>
-            <Copy className="mr-1.5 h-4 w-4" />
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-        </div>
-      )}
-
-      {activeScan?.summary?.ecosystem_counts &&
-        Object.keys(activeScan.summary.ecosystem_counts).length > 0 && (
-          <div className="rounded-lg border border-border bg-card p-4">
-            <EcosystemChart data={activeScan.summary.ecosystem_counts} />
-          </div>
-        )}
-    </div>
-  )
-}
-
-function Loading() {
-  return (
-    <div className="flex items-center justify-center py-24">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-    </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
-      <p className="text-sm text-muted-foreground">{message}</p>
+      <ResultsBody scan={{ activeScan, packages, loading }} table={table} onCancel={handleCancel} />
+      <ExportActions scan={activeScan} packages={table.filtered} />
+      <ResultsSummary scan={activeScan} />
     </div>
   )
 }

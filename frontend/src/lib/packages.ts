@@ -126,3 +126,9 @@ export function buildPageNumbers(totalPages: number, page: number): (number | '.
   }
   return pages
 }
+
+// Before a scan is committed to the URL there is no id yet, so exports of the
+// pending set are named "latest".
+export function exportFilename(scanId: number | undefined, extension: string): string {
+  return `packages-${scanId ?? 'latest'}.${extension}`
+}
