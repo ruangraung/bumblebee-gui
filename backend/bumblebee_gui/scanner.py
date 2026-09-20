@@ -31,6 +31,7 @@ from .scanner_logic import (
 BINARY_PATH = os.environ.get("BUMBLEBEE_BINARY", "/usr/local/bin/bumblebee")
 DATA_DIR = Path(os.environ.get("BUMBLEBEE_DATA_DIR", Path.home() / ".bumblebee-gui"))
 SCANS_DIR = DATA_DIR / "scans"
+THREAT_INTEL_DIR = Path(os.environ.get("BUMBLEBEE_THREAT_INTEL_DIR", "/opt/bumblebee/threat-intel"))
 
 
 def ensure_dirs():
@@ -38,12 +39,26 @@ def ensure_dirs():
     SCANS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def exposure_catalog(request: ScanRequest) -> Optional[str]:
+    """Resolve which catalogue the scan compares packages against.
+
+    An explicit path wins. An empty string means the caller wants no catalogue
+    at all, which is the only way to ask for a scan that reports nothing. When
+    the request says nothing, the catalogues bundled with the scanner are used,
+    if this install has them; a bare checkout does not, and scans then behave
+    exactly as they did before catalogues were bundled.
+    """
+    if request.exposure_catalog is not None:
+        return request.exposure_catalog or None
+    return str(THREAT_INTEL_DIR) if THREAT_INTEL_DIR.is_dir() else None
+
+
 def build_command(request: ScanRequest) -> List[str]:
     """Build Bumblebee CLI command from scan request."""
     cmd = [BINARY_PATH, "scan", "--profile", request.profile.value]
     cmd += repeat_option("--ecosystem", request.ecosystems)
     cmd += repeat_option("--root", request.roots)
-    cmd += valued_option("--exposure-catalog", request.exposure_catalog)
+    cmd += valued_option("--exposure-catalog", exposure_catalog(request))
     cmd += toggle_option("--findings-only", request.findings_only)
     cmd += valued_option("--max-duration", request.max_duration)
     return cmd
