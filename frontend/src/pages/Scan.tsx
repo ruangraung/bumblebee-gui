@@ -1,22 +1,10 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react'
-import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import {
-  ALL_ECOSYSTEMS,
-  DEFAULT_ECOSYSTEMS,
-  PRESETS,
-  addedRoot,
-  buildScanRequest,
-  presetOpensRoots,
-  scanFormWarnings,
-  validateScanForm,
-  withEcosystemToggled,
-} from '@/lib/scanForm'
-import type { Preset, Profile, ScanFormState } from '@/lib/scanForm'
+import { ALL_ECOSYSTEMS, PRESETS } from '@/lib/scanForm'
+import type { Profile } from '@/lib/scanForm'
+import { useScanForm } from '@/hooks/useScanForm'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,99 +50,29 @@ function CollapsibleSection({
 // ---------------------------------------------------------------------------
 
 export default function Scan() {
-  const navigate = useNavigate()
-  const { createScan, loading, error: storeError } = useScanStore()
-
-  // ---- Form state --------------------------------------------------------
-  const [profile, setProfile] = useState<Profile>('baseline')
-  const [ecosystems, setEcosystems] = useState<string[]>(DEFAULT_ECOSYSTEMS)
-  const [roots, setRoots] = useState<string[]>([])
-  const [newRoot, setNewRoot] = useState('')
-  const [exposureCatalog, setExposureCatalog] = useState('')
-  const [findingsOnly, setFindingsOnly] = useState(false)
-  const [maxDuration, setMaxDuration] = useState('10m')
-
-  // ---- Collapsible state -------------------------------------------------
-  const [ecoOpen, setEcoOpen] = useState(false)
-  const [rootsOpen, setRootsOpen] = useState(false)
-  const [exposureOpen, setExposureOpen] = useState(false)
-
-  // ---- Active preset (for the highlighted preset card) -------------------
-  const [activePreset, setActivePreset] = useState<string | null>(null)
-
-  // ---- Local validation error --------------------------------------------
-  const [validationError, setValidationError] = useState<string | null>(null)
-
-  const form: ScanFormState = {
-    profile,
-    ecosystems,
-    roots,
-    exposureCatalog,
-    findingsOnly,
-    maxDuration,
-  }
-
-  // ---- Derived warnings --------------------------------------------------
-  const warnings = scanFormWarnings(form)
-
-  // ---- Preset application ------------------------------------------------
-  function applyPreset(preset: Preset) {
-    setProfile(preset.profile)
-    setEcosystems(preset.ecosystems)
-    setRoots(preset.roots)
-    setActivePreset(preset.label)
-    // Land users where the missing input is if the preset needs roots.
-    if (presetOpensRoots(preset)) {
-      setRootsOpen(true)
-    }
-  }
-
-  // ---- Ecosystem toggles -------------------------------------------------
-  function toggleEcosystem(eco: string) {
-    setEcosystems((prev) => withEcosystemToggled(prev, eco))
-    setActivePreset(null)
-  }
-
-  function selectAllEcosystems() {
-    setEcosystems([...ALL_ECOSYSTEMS])
-  }
-
-  function clearAllEcosystems() {
-    setEcosystems([])
-  }
-
-  // ---- Root directory management -----------------------------------------
-  function addRoot() {
-    const next = addedRoot(roots, newRoot)
-    if (!next) return
-    setRoots(next)
-    setNewRoot('')
-  }
-
-  function removeRoot(root: string) {
-    setRoots((prev) => prev.filter((r) => r !== root))
-  }
-
-  // ---- Scan submission ---------------------------------------------------
-  async function handleStartScan() {
-    setValidationError(null)
-
-    const problem = validateScanForm(form)
-    if (problem) {
-      setValidationError(problem.message)
-      if (problem.revealRoots) setRootsOpen(true)
-      return
-    }
-
-    try {
-      const scan = await createScan(buildScanRequest(form))
-      if (scan?.id) {
-        navigate(`/results/${scan.id}`)
-      }
-    } catch {
-      // Error is surfaced via the store
-    }
-  }
+  const {
+    form,
+    setProfile,
+    newRoot,
+    setNewRoot,
+    setExposureCatalog,
+    setFindingsOnly,
+    setMaxDuration,
+    open,
+    toggleSection,
+    activePreset,
+    applyPreset,
+    toggleEcosystem,
+    selectAllEcosystems,
+    clearAllEcosystems,
+    addRoot,
+    removeRoot,
+    warnings,
+    validationError,
+    storeError,
+    loading,
+    startScan,
+  } = useScanForm()
 
   // ---- Render ------------------------------------------------------------
   return (
@@ -204,7 +122,7 @@ export default function Scan() {
           </label>
           <select
             id="profile"
-            value={profile}
+            value={form.profile}
             onChange={(e) => setProfile(e.target.value as Profile)}
             className="h-9 rounded-md border border-input bg-background px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
@@ -226,9 +144,9 @@ export default function Scan() {
         {/* Collapsible: Ecosystems */}
         <CollapsibleSection
           title="Ecosystems"
-          count={`${ecosystems.length}/${ALL_ECOSYSTEMS.length}`}
-          open={ecoOpen}
-          onToggle={() => setEcoOpen((v) => !v)}
+          count={`${form.ecosystems.length}/${ALL_ECOSYSTEMS.length}`}
+          open={open.ecosystems}
+          onToggle={() => toggleSection('ecosystems')}
         >
           <div className="mb-3 flex gap-2">
             <Button
@@ -251,7 +169,7 @@ export default function Scan() {
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {ALL_ECOSYSTEMS.map((eco) => {
-              const checked = ecosystems.includes(eco)
+              const checked = form.ecosystems.includes(eco)
               return (
                 <label
                   key={eco}
@@ -278,9 +196,9 @@ export default function Scan() {
         {/* Collapsible: Root directories */}
         <CollapsibleSection
           title="Root directories"
-          count={`${roots.length}`}
-          open={rootsOpen}
-          onToggle={() => setRootsOpen((v) => !v)}
+          count={`${form.roots.length}`}
+          open={open.roots}
+          onToggle={() => toggleSection('roots')}
         >
           <div className="mb-3 flex gap-2">
             <input
@@ -311,13 +229,13 @@ export default function Scan() {
             </div>
           )}
 
-          {roots.length === 0 ? (
+          {form.roots.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No roots configured. Scanning from the default paths.
             </p>
           ) : (
             <div className="space-y-2">
-              {roots.map((root) => (
+              {form.roots.map((root) => (
                 <div
                   key={root}
                   className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2"
@@ -340,15 +258,15 @@ export default function Scan() {
         {/* Collapsible: Exposure catalog */}
         <CollapsibleSection
           title="Exposure catalog"
-          open={exposureOpen}
-          onToggle={() => setExposureOpen((v) => !v)}
+          open={open.exposure}
+          onToggle={() => toggleSection('exposure')}
         >
           <p className="mb-3 text-sm text-muted-foreground">
             Cross-reference findings against an exposure catalog file.
           </p>
           <input
             type="text"
-            value={exposureCatalog}
+            value={form.exposureCatalog}
             onChange={(e) => setExposureCatalog(e.target.value)}
             placeholder="Path to exposure catalog file"
             className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -360,7 +278,7 @@ export default function Scan() {
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={findingsOnly}
+              checked={form.findingsOnly}
               onChange={(e) => setFindingsOnly(e.target.checked)}
               className="accent-primary"
             />
@@ -374,7 +292,7 @@ export default function Scan() {
             <input
               id="maxDuration"
               type="text"
-              value={maxDuration}
+              value={form.maxDuration}
               onChange={(e) => setMaxDuration(e.target.value)}
               className="h-9 w-20 rounded-md border border-input bg-background px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
@@ -393,8 +311,8 @@ export default function Scan() {
       <div className="flex justify-end border-t border-border pt-5">
         <Button
           type="button"
-          onClick={handleStartScan}
-          disabled={loading || ecosystems.length === 0}
+          onClick={startScan}
+          disabled={loading || form.ecosystems.length === 0}
           className="min-w-[160px]"
         >
           {loading ? (
