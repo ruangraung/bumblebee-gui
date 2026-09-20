@@ -64,3 +64,14 @@ export function noMatchMessage({
   if (search || ecosystem !== 'all') return 'No packages match your filters.'
   return 'No packages found in this scan.'
 }
+
+// The findings page prefers a completed scan that actually produced findings,
+// because a scan with none renders an empty page. Everything else, including
+// the URL-param case, follows the same rule as the results page.
+export function resolveFindingsScan(scans: ScanRecord[], scanId?: string): ScanRecord | null {
+  if (scanId) return resolveActiveScan(scans, scanId)
+  const withFindings = scans.find(
+    (scan) => scan.status === 'completed' && (scan.summary?.findings_count ?? 0) > 0,
+  )
+  return withFindings ?? resolveActiveScan(scans)
+}
