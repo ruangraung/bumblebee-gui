@@ -1,15 +1,16 @@
 import { useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, Copy, Search } from 'lucide-react'
+import { Download, Copy } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import ScanPicker from '@/components/ScanPicker'
 import { ScanningState } from '@/components/ScanningState'
 import { PackagesTable } from '@/components/PackagesTable'
+import { PackageFilters } from '@/components/PackageFilters'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { useActiveScan } from '@/hooks/useActiveScan'
 import { usePackageTable } from '@/hooks/usePackageTable'
-import { downloadTextFile, packagesToCSV, packagesToTSV, type SortKey } from '@/lib/packages'
+import { downloadTextFile, packagesToCSV, packagesToTSV } from '@/lib/packages'
 import { isInProgress } from '@/lib/scans'
 
 export default function Results() {
@@ -93,40 +94,15 @@ export default function Results() {
       <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/results" />
 
       {packages.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search packages…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-9 w-56 rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </div>
-
-          <select
-            value={ecosystemFilter}
-            onChange={(e) => setEcosystemFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="all">all ecosystems</option>
-            {ecosystems.map((eco) => (
-              <option key={eco} value={eco}>{eco}</option>
-            ))}
-          </select>
-
-          <select
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="name-asc">Name A→Z</option>
-            <option value="name-desc">Name Z→A</option>
-            <option value="ecosystem">Ecosystem</option>
-            <option value="version">Version</option>
-          </select>
-        </div>
+        <PackageFilters
+          ecosystems={ecosystems}
+          search={search}
+          onSearchChange={setSearch}
+          ecosystem={ecosystemFilter}
+          onEcosystemChange={setEcosystemFilter}
+          sortKey={sortKey}
+          onSortChange={setSortKey}
+        />
       )}
 
       {loading && packages.length === 0 ? (
