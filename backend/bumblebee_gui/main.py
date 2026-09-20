@@ -8,6 +8,12 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from .api_helpers import (
+    attach_packages_found,
+    remove_scan_file,
+    require_scan,
+    require_scan_data,
+)
 from .database import (
     delete_scan,
     fail_stale_running_scans,
@@ -26,7 +32,6 @@ from .models import (
     ScanStatus,
 )
 from .scanner import (
-    count_packages,
     generate_ndjson_path,
     get_scan_findings,
     get_scan_packages,
@@ -51,24 +56,27 @@ def _cleanup_scan(scan_id: int) -> None:
     _scan_queues.pop(scan_id, None)
 
 
-def _attach_packages_found(scan: ScanRecord) -> ScanRecord:
-    """Compute the live `packages_found` field for a scan record.
+async def _cancel_running_scan(scan_id: int) -> None:
+    """Cancel a scan's detached task and wake any SSE subscriber.
 
-    Running scans report packages discovered so far (counted from the partial
-    NDJSON file); completed scans report the final total from their summary.
-    Findings-only scans report 0 until done — findings are only counted in
-    the summary. Shared by the detail and list endpoints so the dashboard
-    can render concurrent-scan progress from one cheap list call.
+    Both registry entries are read up front: the task's done callback drops
+    them, so looking them up after the cancel could miss the subscriber queue.
+    The task kills the CLI subprocess (see scanner.run_scan) before finishing,
+    so no zombie scan keeps running after the record is gone.
     """
-    packages_found = None
-    if scan.status == ScanStatus.completed and scan.summary:
-        packages_found = scan.summary.total_packages
-    elif scan.status == ScanStatus.running and scan.ndjson_path:
-        packages_found = count_packages(Path(scan.ndjson_path))
+    task = _background_tasks.get(scan_id)
+    queue = _scan_queues.get(scan_id)
 
-    if packages_found is not None:
-        return scan.model_copy(update={"packages_found": packages_found})
-    return scan
+    if task and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=10)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+
+    # Notify any SSE subscribers that the scan is gone (record removed later).
+    if queue:
+        queue.put_nowait({"type": "cancelled"})
 
 
 @asynccontextmanager
@@ -172,17 +180,13 @@ async def create_scan(request: ScanRequest):
 async def list_scans(limit: int = Query(default=20, ge=1, le=100)):
     """List recent scans, with live progress for any that are running."""
     scans = await get_scans(limit=limit)
-    return [_attach_packages_found(scan) for scan in scans]
+    return [attach_packages_found(scan) for scan in scans]
 
 
 @app.get("/api/scans/{scan_id}", response_model=ScanRecord)
 async def get_scan_detail(scan_id: int):
     """Get scan details by ID, with live progress while running."""
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-
-    return _attach_packages_found(scan)
+    return attach_packages_found(await require_scan(scan_id))
 
 
 def _sse_event(payload: dict) -> str:
@@ -254,29 +258,12 @@ async def scan_events(scan_id: int):
 async def delete_scan_record(scan_id: int):
     """Delete a scan by ID. If it is still running, cancels it first."""
     # Fetch scan first to get ndjson_path for cleanup
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-
-    # If the scan is still running, cancel its background task. The task kills
-    # the CLI subprocess (see scanner.run_scan) before finishing, so no zombie
-    # scan keeps running after the record is gone.
-    task = _background_tasks.get(scan_id)
-    queue = _scan_queues.get(scan_id)
-    if task and not task.done():
-        task.cancel()
-        try:
-            await asyncio.wait_for(task, timeout=10)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
-            pass
-
-    # Notify any SSE subscribers that the scan is gone (record removed below).
-    if queue:
-        queue.put_nowait({"type": "cancelled"})
+    scan = await require_scan(scan_id)
+    await _cancel_running_scan(scan_id)
 
     # Clean up NDJSON file on disk (covers the partial file of a cancelled run)
-    if scan.ndjson_path:
-        Path(scan.ndjson_path).unlink(missing_ok=True)
+    remove_scan_file(scan.ndjson_path)
+
     deleted = await delete_scan(scan_id)
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
@@ -286,23 +273,15 @@ async def delete_scan_record(scan_id: int):
 @app.get("/api/scans/{scan_id}/packages", response_model=list[PackageRecord])
 async def get_packages(scan_id: int):
     """Get packages from a scan."""
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-    if not scan.ndjson_path:
-        raise HTTPException(status_code=404, detail="No data file for this scan")
-    return await get_scan_packages(scan_id, scan.ndjson_path)
+    _, ndjson_path = await require_scan_data(scan_id)
+    return await get_scan_packages(scan_id, ndjson_path)
 
 
 @app.get("/api/scans/{scan_id}/findings", response_model=list[FindingRecord])
 async def get_findings(scan_id: int):
     """Get findings from a scan."""
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-    if not scan.ndjson_path:
-        raise HTTPException(status_code=404, detail="No data file for this scan")
-    return await get_scan_findings(scan_id, scan.ndjson_path)
+    _, ndjson_path = await require_scan_data(scan_id)
+    return await get_scan_findings(scan_id, ndjson_path)
 
 
 @app.get("/api/scans/{scan_id}/export")
@@ -311,13 +290,8 @@ async def export_scan(
     format: str = Query(default="json", pattern="^(json|csv)$"),
 ):
     """Export scan data as JSON or CSV."""
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
-    if not scan.ndjson_path:
-        raise HTTPException(status_code=404, detail="No data file for this scan")
-
-    packages = await get_scan_packages(scan_id, scan.ndjson_path)
-    findings = await get_scan_findings(scan_id, scan.ndjson_path)
+    scan, ndjson_path = await require_scan_data(scan_id)
+    packages = await get_scan_packages(scan_id, ndjson_path)
+    findings = await get_scan_findings(scan_id, ndjson_path)
     payload = ExportPayload(scan=scan, packages=packages, findings=findings)
     return build_export_response(scan_id, payload, EXPORT_FORMATS[format])
