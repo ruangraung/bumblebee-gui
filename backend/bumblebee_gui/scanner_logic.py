@@ -6,8 +6,9 @@ a subprocess, a web layer or a database in the picture.
 """
 
 import json
+import time
 from pathlib import Path
-from typing import Iterable, Iterator, List, Optional
+from typing import Callable, Iterable, Iterator, List, Optional
 
 from .models import FindingRecord, PackageRecord, ScanSummary
 
@@ -126,3 +127,45 @@ def finding_record(record: dict) -> FindingRecord:
         project_path=record.get("project_path"),
         confidence=record.get("confidence"),
     )
+
+
+def is_package_line(line: bytes) -> bool:
+    """Cheap pre-filter: only a line mentioning packages can hold a package record."""
+    return bool(line) and b"package" in line
+
+
+PROGRESS_STEP = 25
+PROGRESS_INTERVAL = 0.5
+
+
+class PackageProgress:
+    """Running package count for a live scan, reported at a throttled rate.
+
+    ``observe`` is fed every raw output line; the callback fires at most once
+    per ``PROGRESS_STEP`` packages or ``PROGRESS_INTERVAL`` seconds, whichever
+    comes first, so a fast CLI cannot flood the caller with updates.
+    """
+
+    def __init__(self, on_progress: Optional[Callable[[int], None]] = None) -> None:
+        self._on_progress = on_progress
+        self._seen = 0
+        self._last_emit = 0.0
+
+    def observe(self, line: bytes) -> None:
+        """Count one raw output line and report progress when it is due."""
+        if self._on_progress is None or not is_package_line(line):
+            return
+        record = decode_line(line)
+        if record is None or record_type(record) != PACKAGE:
+            return
+        self._seen += 1
+        if self._is_due():
+            self._on_progress(self._seen)
+
+    def _is_due(self) -> bool:
+        """Whether the count is reported now, updating the emit clock when it is."""
+        now = time.monotonic()
+        if self._seen % PROGRESS_STEP != 0 and now - self._last_emit < PROGRESS_INTERVAL:
+            return False
+        self._last_emit = now
+        return True

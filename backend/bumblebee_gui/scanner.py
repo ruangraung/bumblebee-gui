@@ -1,7 +1,6 @@
 import asyncio
-import json
 import os
-import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -16,6 +15,7 @@ from .models import (
 from .scanner_logic import (
     FINDING,
     PACKAGE,
+    PackageProgress,
     calculate_summary,
     decode_records,
     package_record,
@@ -67,6 +67,68 @@ async def _iter_lines(stream):
         yield buf.rstrip(b"\r")
 
 
+@dataclass
+class _CliProcess:
+    """A running Bumblebee CLI together with its captured output streams."""
+
+    process: asyncio.subprocess.Process
+    stdout: asyncio.StreamReader
+    stderr: asyncio.StreamReader
+
+
+async def _spawn_cli(cmd: List[str]) -> _CliProcess:
+    """Start the Bumblebee CLI with its output streams captured."""
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    if process.stdout is None or process.stderr is None:
+        # Cannot happen with PIPE above; guards the type checker only.
+        raise RuntimeError("Failed to capture subprocess output")
+    return _CliProcess(process, process.stdout, process.stderr)
+
+
+async def _stream_to_file(stream, ndjson_path: Path, on_progress) -> None:
+    """Write every NDJSON line to disk as it arrives, reporting progress."""
+    progress = PackageProgress(on_progress)
+    with open(ndjson_path, "wb") as out:
+        async for line in _iter_lines(stream):
+            out.write(line + b"\n")
+            progress.observe(line)
+
+
+async def _abort(process, stderr_task) -> None:
+    """Kill a cancelled scan's CLI, reap it and release its stderr reader."""
+    process.kill()
+    await process.wait()
+    if stderr_task.done():
+        return
+    stderr_task.cancel()
+    try:
+        await stderr_task
+    except asyncio.CancelledError:
+        pass
+
+
+async def _run_cli(cli: _CliProcess, ndjson_path: Path, on_progress) -> bytes:
+    """Stream the CLI output to disk, then wait for it and return its stderr.
+
+    The stderr reader is drained concurrently so a chatty CLI cannot deadlock
+    the stream.
+    """
+    stderr_task = asyncio.create_task(cli.stderr.read())
+    try:
+        await _stream_to_file(cli.stdout, ndjson_path, on_progress)
+        await cli.process.wait()
+        return await stderr_task
+    except asyncio.CancelledError:
+        # Cancellation (user aborted the scan): kill the CLI, reap it, and
+        # release the stderr reader before propagating.
+        await _abort(cli.process, stderr_task)
+        raise
+
+
 async def run_scan(
     request: ScanRequest,
     ndjson_path: Optional[Path] = None,
@@ -91,50 +153,10 @@ async def run_scan(
         ndjson_path = generate_ndjson_path(request.profile)
 
     # Run Bumblebee as subprocess
-    process = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    if process.stdout is None or process.stderr is None:
-        # Cannot happen with PIPE above — guards the type checker only.
-        raise RuntimeError("Failed to capture subprocess output")
+    cli = await _spawn_cli(cmd)
+    stderr = await _run_cli(cli, ndjson_path, on_progress)
 
-    # Drain stderr concurrently so a chatty CLI can't deadlock the stream.
-    stderr_task = asyncio.create_task(process.stderr.read())
-
-    try:
-        packages_seen = 0
-        last_emit = 0.0
-        with open(ndjson_path, "wb") as out:
-            async for line in _iter_lines(process.stdout):
-                out.write(line + b"\n")
-                if on_progress is not None and line and b"package" in line:
-                    try:
-                        if json.loads(line).get("record_type") == "package":
-                            packages_seen += 1
-                            now = time.monotonic()
-                            if packages_seen % 25 == 0 or now - last_emit >= 0.5:
-                                last_emit = now
-                                on_progress(packages_seen)
-                    except json.JSONDecodeError:
-                        continue
-        await process.wait()
-        stderr = await stderr_task
-    except asyncio.CancelledError:
-        # Cancellation (user aborted the scan): kill the CLI, reap it, and
-        # release the stderr reader before propagating.
-        process.kill()
-        await process.wait()
-        if not stderr_task.done():
-            stderr_task.cancel()
-            try:
-                await stderr_task
-            except asyncio.CancelledError:
-                pass
-        raise
-
-    if process.returncode != 0:
+    if cli.process.returncode != 0:
         error_msg = stderr.decode().strip()
         raise RuntimeError(f"Bumblebee scan failed: {error_msg}")
 
