@@ -1,6 +1,7 @@
-import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { PageHeader } from '@/components/PageHeader'
 import { ScanEcosystems } from '@/components/ScanEcosystems'
+import { ScanExposureCatalog } from '@/components/ScanExposureCatalog'
+import { ScanOptions } from '@/components/ScanOptions'
 import { ScanRootDirectories } from '@/components/ScanRootDirectories'
 import { ScanPresets } from '@/components/ScanPresets'
 import { Button } from '@/components/ui/button'
@@ -101,48 +102,20 @@ export default function Scan() {
         />
 
         {/* Collapsible: Exposure catalog */}
-        <CollapsibleSection
-          title="Exposure catalog"
+        <ScanExposureCatalog
+          value={form.exposureCatalog}
           open={open.exposure}
           onToggle={() => toggleSection('exposure')}
-        >
-          <p className="mb-3 text-sm text-muted-foreground">
-            Cross-reference findings against an exposure catalog file.
-          </p>
-          <input
-            type="text"
-            value={form.exposureCatalog}
-            onChange={(e) => setExposureCatalog(e.target.value)}
-            placeholder="Path to exposure catalog file"
-            className="h-9 w-full rounded-md border border-input bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </CollapsibleSection>
+          onChange={setExposureCatalog}
+        />
 
         {/* Additional options row */}
-        <div className="flex flex-wrap items-center gap-6 pt-1">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.findingsOnly}
-              onChange={(e) => setFindingsOnly(e.target.checked)}
-              className="accent-primary"
-            />
-            Findings only
-          </label>
-
-          <div className="flex items-center gap-2">
-            <label htmlFor="maxDuration" className="text-sm">
-              Max duration
-            </label>
-            <input
-              id="maxDuration"
-              type="text"
-              value={form.maxDuration}
-              onChange={(e) => setMaxDuration(e.target.value)}
-              className="h-9 w-20 rounded-md border border-input bg-background px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-        </div>
+        <ScanOptions
+          findingsOnly={form.findingsOnly}
+          onFindingsOnlyChange={setFindingsOnly}
+          maxDuration={form.maxDuration}
+          onMaxDurationChange={setMaxDuration}
+        />
       </section>
 
       {/* Error message */}
