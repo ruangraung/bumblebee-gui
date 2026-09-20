@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { PackageRecord } from '@/lib/api'
-import { downloadTextFile, exportFilename, packagesToCSV, packagesToTSV } from '@/lib/packages'
+import { exportFilename, packagesToCSV, packagesToTSV } from '@/lib/packages'
+import { downloadTextFile } from '@/lib/export'
 
 // Download and clipboard actions for a set of package rows, plus the short
 // confirmation the copy button shows.
