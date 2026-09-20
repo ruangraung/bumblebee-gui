@@ -1,4 +1,4 @@
-import type { PackageRecord, ScanRecord } from '@/lib/api'
+import type { FindingRecord, PackageRecord, ScanRecord } from '@/lib/api'
 
 export function isInProgress(status?: string): boolean {
   return status === 'running' || status === 'pending'
@@ -74,4 +74,15 @@ export function resolveFindingsScan(scans: ScanRecord[], scanId?: string): ScanR
     (scan) => scan.status === 'completed' && (scan.summary?.findings_count ?? 0) > 0,
   )
   return withFindings ?? resolveActiveScan(scans)
+}
+
+// A scan's findings are fetched once, on demand: a completed scan whose
+// findings are still missing from the cache, and no other case.
+export function findingsToFetch(
+  cache: Record<number, FindingRecord[] | undefined>,
+  scan: ScanRecord | null,
+): number | null {
+  if (!scan) return null
+  if (scan.status !== 'completed') return null
+  return cache[scan.id] === undefined ? scan.id : null
 }
