@@ -93,5 +93,7 @@ jobs:
         run: npm ci
       - name: npm audit (CVE gate)
         run: npm audit --audit-level=high
+      - name: Unit tests (src/lib)
+        run: npm run test
       - name: Type-check + build
         run: npm run build
