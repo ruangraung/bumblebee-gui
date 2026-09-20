@@ -81,7 +81,7 @@ export default function Sidebar() {
           <NavItem key={item.to} {...item} />
         ))}
         <p className="mt-4 px-3 font-mono text-[10px] leading-relaxed text-muted-foreground/70">
-          gui v0.1.0 · cli v0.1.1
+          gui v0.1.0 · cli v0.1.2
         </p>
       </div>
     </aside>
