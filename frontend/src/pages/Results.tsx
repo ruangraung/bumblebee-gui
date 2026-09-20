@@ -8,10 +8,18 @@ import { ScanningState } from '@/components/ScanningState'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Badge } from '@/components/ui/badge'
-
-const PAGE_SIZE = 50
-
-type SortKey = 'name-asc' | 'name-desc' | 'ecosystem' | 'version'
+import {
+  buildPageNumbers,
+  downloadTextFile,
+  filterAndSortPackages,
+  getEcosystems,
+  packagesToCSV,
+  packagesToTSV,
+  pageCount,
+  pageRange,
+  paginate,
+  type SortKey,
+} from '@/lib/packages'
 
 export default function Results() {
   const { scanId } = useParams<{ scanId?: string }>()
@@ -34,7 +42,7 @@ export default function Results() {
   const [page, setPage] = useState(1)
   const [copied, setCopied] = useState(false)
 
-  // Resolve the scan to display: explicit param or latest
+  // Scan to show: URL param, else the most recent completed, else the most recent.
   const activeScan = useMemo(() => {
     if (scanId) {
       return scans.find((s) => s.id === Number(scanId)) ?? null
@@ -44,7 +52,7 @@ export default function Results() {
     return scans[0] ?? null
   }, [scans, scanId])
 
-  // Per-scan cache read — empty until that scan's results are fetched.
+  // Read this scan's cached packages; empty until its results are fetched.
   const packages = packagesByScan[activeScan?.id ?? -1] ?? []
 
   useEffect(() => {
@@ -70,65 +78,17 @@ export default function Results() {
     setPage(1)
   }, [search, ecosystemFilter, sortKey])
 
-  const ecosystems = useMemo(() => {
-    const set = new Set(packages.map((p) => p.ecosystem))
-    return Array.from(set).sort()
-  }, [packages])
+  const ecosystems = useMemo(() => getEcosystems(packages), [packages])
 
-  const filtered = useMemo(() => {
-    let result = [...packages]
+  const filtered = useMemo(
+    () => filterAndSortPackages(packages, { search, ecosystem: ecosystemFilter, sortKey }),
+    [packages, search, ecosystemFilter, sortKey],
+  )
 
-    if (search.trim()) {
-      const q = search.toLowerCase()
-      result = result.filter((p) => p.package_name.toLowerCase().includes(q))
-    }
-
-    if (ecosystemFilter !== 'all') {
-      result = result.filter((p) => p.ecosystem === ecosystemFilter)
-    }
-
-    result.sort((a, b) => {
-      switch (sortKey) {
-        case 'name-asc':
-          return a.package_name.localeCompare(b.package_name)
-        case 'name-desc':
-          return b.package_name.localeCompare(a.package_name)
-        case 'ecosystem':
-          return a.ecosystem.localeCompare(b.ecosystem) || a.package_name.localeCompare(b.package_name)
-        case 'version':
-          return a.version.localeCompare(b.version) || a.package_name.localeCompare(b.package_name)
-        default:
-          return 0
-      }
-    })
-
-    return result
-  }, [packages, search, ecosystemFilter, sortKey])
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paged = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return filtered.slice(start, start + PAGE_SIZE)
-  }, [filtered, page])
-
-  const pageStart = filtered.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
-  const pageEnd = Math.min(page * PAGE_SIZE, filtered.length)
-
-  const pageNumbers = useMemo(() => {
-    const pages: (number | '...')[] = []
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i)
-    } else {
-      pages.push(1)
-      if (page > 3) pages.push('...')
-      const start = Math.max(2, page - 1)
-      const end = Math.min(totalPages - 1, page + 1)
-      for (let i = start; i <= end; i++) pages.push(i)
-      if (page < totalPages - 2) pages.push('...')
-      pages.push(totalPages)
-    }
-    return pages
-  }, [totalPages, page])
+  const totalPages = pageCount(filtered.length)
+  const paged = useMemo(() => paginate(filtered, page), [filtered, page])
+  const { start: pageStart, end: pageEnd } = pageRange(filtered.length, page)
+  const pageNumbers = useMemo(() => buildPageNumbers(totalPages, page), [totalPages, page])
 
   const handleCancel = useCallback(async () => {
     if (!activeScan) return
@@ -136,40 +96,24 @@ export default function Results() {
     navigate('/')
   }, [activeScan, deleteScan, navigate])
 
-  // ── Export helpers ──
   const exportJSON = useCallback(() => {
-    const blob = new Blob([JSON.stringify(filtered, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `packages-${activeScan?.id ?? 'latest'}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadTextFile(
+      `packages-${activeScan?.id ?? 'latest'}.json`,
+      JSON.stringify(filtered, null, 2),
+      'application/json',
+    )
   }, [filtered, activeScan])
 
   const exportCSV = useCallback(() => {
-    const header = 'package_name,ecosystem,version,source_type,project_path,confidence'
-    const rows = filtered.map((p) =>
-      [escapeCSV(p.package_name), escapeCSV(p.ecosystem), escapeCSV(p.version), escapeCSV(p.source_type ?? ''), escapeCSV(p.project_path ?? ''), escapeCSV(p.confidence ?? '')].join(',')
-    )
-    const csv = [header, ...rows].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `packages-${activeScan?.id ?? 'latest'}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadTextFile(`packages-${activeScan?.id ?? 'latest'}.csv`, packagesToCSV(filtered), 'text/csv')
   }, [filtered, activeScan])
 
   const copyToClipboard = useCallback(async () => {
-    const text = filtered.map((p) => `${p.package_name}\t${p.ecosystem}\t${p.version}\t${p.source_type ?? ''}\t${p.project_path ?? ''}\t${p.confidence ?? ''}`).join('\n')
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(packagesToTSV(filtered))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }, [filtered])
 
-  // ── Render ──
   const scanDate = activeScan?.timestamp
     ? new Date(activeScan.timestamp).toISOString().slice(0, 10)
     : '—'
@@ -187,7 +131,6 @@ export default function Results() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      {/* ── Header ── */}
       <div>
         <PageHeader
           title="Results"
@@ -202,10 +145,8 @@ export default function Results() {
         </p>
       </div>
 
-      {/* Scan switcher */}
       <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/results" />
 
-      {/* ── Filters bar ── */}
       {packages.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
@@ -243,7 +184,6 @@ export default function Results() {
         </div>
       )}
 
-      {/* ── Body ── */}
       {loading && packages.length === 0 ? (
         <Loading />
       ) : !activeScan ? (
@@ -295,7 +235,6 @@ export default function Results() {
             </tbody>
           </table>
 
-          {/* Pagination */}
           <div className="flex items-center justify-between border-t border-border px-4 py-3">
             <span className="font-mono text-xs text-muted-foreground">
               {pageStart}–{pageEnd} / {filtered.length}
@@ -339,7 +278,6 @@ export default function Results() {
         </div>
       )}
 
-      {/* ── Export ── */}
       {filtered.length > 0 && (
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportJSON}>
@@ -357,7 +295,6 @@ export default function Results() {
         </div>
       )}
 
-      {/* ── Summary chart ── */}
       {activeScan?.summary?.ecosystem_counts &&
         Object.keys(activeScan.summary.ecosystem_counts).length > 0 && (
           <div className="rounded-lg border border-border bg-card p-4">
@@ -367,8 +304,6 @@ export default function Results() {
     </div>
   )
 }
-
-// ── Sub-components ──
 
 function Loading() {
   return (
@@ -384,11 +319,4 @@ function EmptyState({ message }: { message: string }) {
       <p className="text-sm text-muted-foreground">{message}</p>
     </div>
   )
-}
-
-function escapeCSV(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`
-  }
-  return value
 }
