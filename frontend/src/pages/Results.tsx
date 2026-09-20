@@ -1,100 +1,45 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Download, Copy, Search, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
 import ScanPicker from '@/components/ScanPicker'
 import { ScanningState } from '@/components/ScanningState'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
 import { Badge } from '@/components/ui/badge'
-import {
-  buildPageNumbers,
-  downloadTextFile,
-  filterAndSortPackages,
-  getEcosystems,
-  packagesToCSV,
-  packagesToTSV,
-  pageCount,
-  pageRange,
-  paginate,
-  type SortKey,
-} from '@/lib/packages'
+import { useActiveScan } from '@/hooks/useActiveScan'
+import { usePackageTable } from '@/hooks/usePackageTable'
+import { downloadTextFile, packagesToCSV, packagesToTSV, type SortKey } from '@/lib/packages'
+import { isInProgress } from '@/lib/scans'
 
 export default function Results() {
   const { scanId } = useParams<{ scanId?: string }>()
   const navigate = useNavigate()
+  const { scans, activeScan, packages, loading, error, clearError, cancel } = useActiveScan(scanId)
   const {
-    scans,
-    packagesByScan,
-    loading,
-    error,
-    fetchScans,
-    fetchPackages,
-    waitForScan,
-    deleteScan,
-    clearError,
-  } = useScanStore()
-
-  const [search, setSearch] = useState('')
-  const [ecosystemFilter, setEcosystemFilter] = useState<string>('all')
-  const [sortKey, setSortKey] = useState<SortKey>('name-asc')
-  const [page, setPage] = useState(1)
+    search,
+    setSearch,
+    ecosystemFilter,
+    setEcosystemFilter,
+    sortKey,
+    setSortKey,
+    page,
+    setPage,
+    ecosystems,
+    filtered,
+    totalPages,
+    paged,
+    pageStart,
+    pageEnd,
+    pageNumbers,
+  } = usePackageTable(packages)
   const [copied, setCopied] = useState(false)
-
-  // Scan to show: URL param, else the most recent completed, else the most recent.
-  const activeScan = useMemo(() => {
-    if (scanId) {
-      return scans.find((s) => s.id === Number(scanId)) ?? null
-    }
-    const completed = scans.filter((s) => s.status === 'completed')
-    if (completed.length > 0) return completed[0]
-    return scans[0] ?? null
-  }, [scans, scanId])
-
-  // Read this scan's cached packages; empty until its results are fetched.
-  const packages = packagesByScan[activeScan?.id ?? -1] ?? []
-
-  useEffect(() => {
-    fetchScans()
-  }, [fetchScans])
-
-  useEffect(() => {
-    if (activeScan && activeScan.status === 'completed' && !packagesByScan[activeScan.id]) {
-      fetchPackages(activeScan.id)
-    }
-  }, [activeScan, packagesByScan, fetchPackages])
-
-  const scanStatus = activeScan?.status
-  useEffect(() => {
-    if (activeScan && (scanStatus === 'running' || scanStatus === 'pending')) {
-      waitForScan(activeScan.id).catch(() => {
-        // Errors are surfaced through the store
-      })
-    }
-  }, [activeScan?.id, scanStatus, waitForScan])
-
-  useEffect(() => {
-    setPage(1)
-  }, [search, ecosystemFilter, sortKey])
-
-  const ecosystems = useMemo(() => getEcosystems(packages), [packages])
-
-  const filtered = useMemo(
-    () => filterAndSortPackages(packages, { search, ecosystem: ecosystemFilter, sortKey }),
-    [packages, search, ecosystemFilter, sortKey],
-  )
-
-  const totalPages = pageCount(filtered.length)
-  const paged = useMemo(() => paginate(filtered, page), [filtered, page])
-  const { start: pageStart, end: pageEnd } = pageRange(filtered.length, page)
-  const pageNumbers = useMemo(() => buildPageNumbers(totalPages, page), [totalPages, page])
 
   const handleCancel = useCallback(async () => {
     if (!activeScan) return
-    await deleteScan(activeScan.id)
+    await cancel()
     navigate('/')
-  }, [activeScan, deleteScan, navigate])
+  }, [activeScan, cancel, navigate])
 
   const exportJSON = useCallback(() => {
     downloadTextFile(
@@ -188,7 +133,7 @@ export default function Results() {
         <Loading />
       ) : !activeScan ? (
         <EmptyState message="Run a scan to see package results here." />
-      ) : activeScan.status === 'running' || activeScan.status === 'pending' ? (
+      ) : isInProgress(activeScan.status) ? (
         <ScanningState
           packagesFound={activeScan.packages_found}
           onCancel={handleCancel}
