@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, Copy, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Download, Copy, Search } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import ScanPicker from '@/components/ScanPicker'
 import { ScanningState } from '@/components/ScanningState'
+import { PackagesTable } from '@/components/PackagesTable'
 import { Button } from '@/components/ui/button'
 import { EcosystemChart } from '@/components/EcosystemChart'
-import { Badge } from '@/components/ui/badge'
 import { useActiveScan } from '@/hooks/useActiveScan'
 import { usePackageTable } from '@/hooks/usePackageTable'
 import { downloadTextFile, packagesToCSV, packagesToTSV, type SortKey } from '@/lib/packages'
@@ -149,78 +149,14 @@ export default function Results() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Package</th>
-                <th className="px-4 py-3 font-medium">Ecosystem</th>
-                <th className="px-4 py-3 font-medium">Version</th>
-                <th className="px-4 py-3 font-medium">Source</th>
-                <th className="px-4 py-3 font-medium">Path</th>
-                <th className="px-4 py-3 font-medium">Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paged.map((pkg, i) => (
-                <tr
-                  key={`${pkg.package_name}-${pkg.version}-${i}`}
-                  className="border-b border-border last:border-0 transition-colors hover:bg-accent/40"
-                >
-                  <td className="px-4 py-2.5 font-mono text-[13px] font-medium">{pkg.package_name}</td>
-                  <td className="px-4 py-2.5">
-                    <Badge variant="neutral" className="font-mono">{pkg.ecosystem}</Badge>
-                  </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.version}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{pkg.source_type ?? '—'}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.project_path ?? '—'}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{pkg.confidence ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex items-center justify-between border-t border-border px-4 py-3">
-            <span className="font-mono text-xs text-muted-foreground">
-              {pageStart}–{pageEnd} / {filtered.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={page === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              {pageNumbers.map((p, i) =>
-                p === '...' ? (
-                  <span key={`ellipsis-${i}`} className="px-1 text-muted-foreground">…</span>
-                ) : (
-                  <Button
-                    key={p}
-                    variant={p === page ? 'default' : 'ghost'}
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setPage(p as number)}
-                  >
-                    {p}
-                  </Button>
-                )
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </div>
+        <PackagesTable
+          rows={paged}
+          page={page}
+          totalPages={totalPages}
+          pageNumbers={pageNumbers}
+          range={{ start: pageStart, end: pageEnd, total: filtered.length }}
+          onPageChange={(next) => setPage(Math.min(totalPages, Math.max(1, next)))}
+        />
       )}
 
       {filtered.length > 0 && (
