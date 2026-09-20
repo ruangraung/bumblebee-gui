@@ -9,10 +9,18 @@ RUN apt-get update && apt-get install -y \
     tar \
     && rm -rf /var/lib/apt/lists/*
 
-# Download Bumblebee binary
-ARG BUMBLEBEE_VERSION=0.1.1
-RUN curl -L "https://github.com/perplexityai/bumblebee/releases/download/v${BUMBLEBEE_VERSION}/bumblebee_${BUMBLEBEE_VERSION}_linux_amd64.tar.gz" \
+# Download Bumblebee binary.
+#
+# The tag and the tarball's sha256 are both pinned. This downloads a scanner
+# that will then run against the filesystem, so the artifact is verified before
+# it is ever executed. The digest is the one published in the release's own
+# asset metadata (and repeated in its checksums.txt); curl -f so an error page
+# can never be saved in place of the tarball.
+ARG BUMBLEBEE_VERSION=0.1.2
+ARG BUMBLEBEE_SHA256=53b080cf3ddb692b0c4e5492ef4785b4c54daf1624fcd0fcba3958116a0be8d9
+RUN curl -fsSL "https://github.com/perplexityai/bumblebee/releases/download/v${BUMBLEBEE_VERSION}/bumblebee_${BUMBLEBEE_VERSION}_linux_amd64.tar.gz" \
     -o /tmp/bumblebee.tar.gz \
+    && echo "${BUMBLEBEE_SHA256}  /tmp/bumblebee.tar.gz" | sha256sum -c - \
     && tar -xzf /tmp/bumblebee.tar.gz -C /usr/local/bin/ \
     && rm /tmp/bumblebee.tar.gz \
     && chmod +x /usr/local/bin/bumblebee
