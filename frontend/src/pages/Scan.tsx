@@ -1,10 +1,11 @@
 import { PageHeader } from '@/components/PageHeader'
 import { ScanEcosystems } from '@/components/ScanEcosystems'
+import { ScanErrorNotice } from '@/components/ScanErrorNotice'
 import { ScanExposureCatalog } from '@/components/ScanExposureCatalog'
 import { ScanOptions } from '@/components/ScanOptions'
 import { ScanRootDirectories } from '@/components/ScanRootDirectories'
 import { ScanPresets } from '@/components/ScanPresets'
-import { Button } from '@/components/ui/button'
+import { ScanStartButton } from '@/components/ScanStartButton'
 import type { Profile } from '@/lib/scanForm'
 import { useScanForm } from '@/hooks/useScanForm'
 
@@ -119,30 +120,14 @@ export default function Scan() {
       </section>
 
       {/* Error message */}
-      {(validationError || storeError) && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {validationError || storeError}
-        </div>
-      )}
+      <ScanErrorNotice validationError={validationError} storeError={storeError} />
 
       {/* Start Scan */}
-      <div className="flex justify-end border-t border-border pt-5">
-        <Button
-          type="button"
-          onClick={startScan}
-          disabled={loading || form.ecosystems.length === 0}
-          className="min-w-[160px]"
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              Scanning…
-            </span>
-          ) : (
-            'Start scan'
-          )}
-        </Button>
-      </div>
+      <ScanStartButton
+        loading={loading}
+        disabled={loading || form.ecosystems.length === 0}
+        onStart={startScan}
+      />
     </div>
   )
 }
