@@ -1,9 +1,9 @@
 import { Plus, X } from 'lucide-react'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { PageHeader } from '@/components/PageHeader'
+import { ScanEcosystems } from '@/components/ScanEcosystems'
+import { ScanPresets } from '@/components/ScanPresets'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { ALL_ECOSYSTEMS, PRESETS } from '@/lib/scanForm'
 import type { Profile } from '@/lib/scanForm'
 import { useScanForm } from '@/hooks/useScanForm'
 
@@ -46,32 +46,7 @@ export default function Scan() {
       />
 
       {/* Quick Presets */}
-      <section className="space-y-3">
-        <h2 className="overline">Quick presets</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {PRESETS.map((preset) => {
-            const active = activePreset === preset.label
-            return (
-              <button
-                key={preset.label}
-                type="button"
-                onClick={() => applyPreset(preset)}
-                className={cn(
-                  'flex flex-col items-start gap-1 rounded-lg border bg-card p-4 text-left transition-colors',
-                  active
-                    ? 'border-primary/60 bg-primary/5'
-                    : 'hover:border-muted-foreground/40 hover:bg-accent/50',
-                )}
-              >
-                <span className="text-sm font-medium">{preset.label}</span>
-                <span className="text-xs leading-snug text-muted-foreground">
-                  {preset.description}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </section>
+      <ScanPresets activePreset={activePreset} onApply={applyPreset} />
 
       {/* Scan Configuration */}
       <section className="space-y-4">
@@ -104,56 +79,14 @@ export default function Scan() {
         )}
 
         {/* Collapsible: Ecosystems */}
-        <CollapsibleSection
-          title="Ecosystems"
-          count={`${form.ecosystems.length}/${ALL_ECOSYSTEMS.length}`}
+        <ScanEcosystems
+          ecosystems={form.ecosystems}
           open={open.ecosystems}
           onToggle={() => toggleSection('ecosystems')}
-        >
-          <div className="mb-3 flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={selectAllEcosystems}
-            >
-              Select all
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={clearAllEcosystems}
-            >
-              Clear
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {ALL_ECOSYSTEMS.map((eco) => {
-              const checked = form.ecosystems.includes(eco)
-              return (
-                <label
-                  key={eco}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 font-mono text-sm transition-colors',
-                    checked
-                      ? 'border-primary/50 bg-primary/5 text-foreground'
-                      : 'text-muted-foreground hover:bg-accent/50',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleEcosystem(eco)}
-                    className="accent-primary"
-                  />
-                  {eco}
-                </label>
-              )
-            })}
-          </div>
-        </CollapsibleSection>
+          onToggleEcosystem={toggleEcosystem}
+          onSelectAll={selectAllEcosystems}
+          onClear={clearAllEcosystems}
+        />
 
         {/* Collapsible: Root directories */}
         <CollapsibleSection
