@@ -46,9 +46,16 @@ export function scanSummaryLine(scan: ScanRecord | null, packageCount: number): 
   return `${date} · ${scan.profile} · ${scan.status}`
 }
 
+// The scan line follows the reader's own clock: a scan started at 01:30 in
+// Jakarta belongs to that day, so the label is built from local parts rather
+// than the UTC day of the timestamp.
 export function scanDateLabel(timestamp?: string): string {
   if (!timestamp) return 'n/a'
-  return new Date(timestamp).toISOString().slice(0, 10)
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return 'n/a'
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
 }
 
 // A filtered-out list reads differently from a scan that genuinely found

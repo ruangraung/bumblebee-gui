@@ -1,5 +1,5 @@
 import type { PackageRecord } from '@/lib/api'
-import { buildCSV } from '@/lib/export'
+import { buildCSV, sanitizeCell } from '@/lib/export'
 
 export const PAGE_SIZE = 50
 
@@ -34,11 +34,18 @@ export function packagesToCSV(packages: PackageRecord[]): string {
 
 // Clipboard format: no header, tab-separated, so a paste lands as columns.
 export function packagesToTSV(packages: PackageRecord[]): string {
-  return packages.map((pkg) => exportFields(pkg).join('\t')).join('\n')
+  return packages.map((pkg) => exportFields(pkg).map(sanitizeCell).join('\t')).join('\n')
 }
 
 export function getEcosystems(packages: PackageRecord[]): string[] {
   return Array.from(new Set(packages.map((pkg) => pkg.ecosystem))).sort()
+}
+
+// Versions are read the way a person reads them, so 10.0.0 sorts above 9.0.0
+// instead of below it. This is not full semver ordering: a pre-release suffix
+// still sorts after its release.
+function compareVersions(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true })
 }
 
 // Every sort key falls back to the package name, so equal ecosystems or
@@ -49,7 +56,7 @@ const COMPARATORS: Record<SortKey, (a: PackageRecord, b: PackageRecord) => numbe
   ecosystem: (a, b) =>
     a.ecosystem.localeCompare(b.ecosystem) || a.package_name.localeCompare(b.package_name),
   version: (a, b) =>
-    a.version.localeCompare(b.version) || a.package_name.localeCompare(b.package_name),
+    compareVersions(a.version, b.version) || a.package_name.localeCompare(b.package_name),
 }
 
 export function filterAndSortPackages(
@@ -59,7 +66,7 @@ export function filterAndSortPackages(
   let result = [...packages]
 
   if (search.trim()) {
-    const q = search.toLowerCase()
+    const q = search.trim().toLowerCase()
     result = result.filter((pkg) => pkg.package_name.toLowerCase().includes(q))
   }
 

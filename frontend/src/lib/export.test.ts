@@ -41,3 +41,32 @@ describe("buildCSV", () => {
     expect(buildCSV(["a", "b"], [])).toBe("a,b");
   });
 });
+
+describe("spreadsheet formula injection", () => {
+  // A package name is attacker-controlled data, so the export must not hand a
+  // spreadsheet something it will execute.
+  it("marks a cell a spreadsheet would run as a formula", () => {
+    expect(escapeCSV("=cmd|'/c calc'!A1")).toBe("'=cmd|'/c calc'!A1");
+    expect(escapeCSV("+1+1")).toBe("'+1+1");
+    expect(escapeCSV("-2+3")).toBe("'-2+3");
+    expect(escapeCSV("@SUM(1+1)")).toBe("'@SUM(1+1)");
+  });
+
+  it("marks a cell that would shift the row", () => {
+    expect(escapeCSV("\tleading tab")).toBe("'\tleading tab");
+    expect(escapeCSV("\rleading return")).toBe("'\rleading return");
+  });
+
+  it("leaves a scoped package name alone", () => {
+    expect(escapeCSV("@types/node")).toBe("@types/node");
+    expect(escapeCSV("@babel/core")).toBe("@babel/core");
+  });
+
+  it("guards a cell that also needs the delimiter quoting", () => {
+    expect(escapeCSV("=A,B")).toBe("\"'=A,B\"");
+  });
+
+  it("guards a package name written into a built row", () => {
+    expect(buildCSV(["package_name"], [["=1+1"]])).toBe("package_name\n'=1+1");
+  });
+});

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FindingRecord, PackageRecord, ScanRecord } from "@/lib/api";
 import {
   findingsToFetch,
@@ -125,13 +125,22 @@ describe("scanSummaryLine", () => {
 });
 
 describe("scanDateLabel", () => {
-  it("takes the date part of the timestamp", () => {
-    expect(scanDateLabel("2026-09-20T16:00:00.000Z")).toBe("2026-09-20");
-  });
-
   it("reads n/a when the scan has no timestamp", () => {
     expect(scanDateLabel(undefined)).toBe("n/a");
     expect(scanDateLabel("")).toBe("n/a");
+  });
+
+  it("reads n/a for a timestamp it cannot parse", () => {
+    expect(scanDateLabel("not a date")).toBe("n/a");
+  });
+
+  it("labels the scan with the reader's own day, not the UTC day", () => {
+    // 18:01 UTC is already the twenty-first in Jakarta (UTC+7). vi.stubEnv is
+    // used rather than touching process.env directly, because the frontend
+    // build type-checks these files without Node's globals.
+    vi.stubEnv("TZ", "Asia/Jakarta");
+    expect(scanDateLabel("2026-09-20T18:01:10.000Z")).toBe("2026-09-21");
+    vi.unstubAllEnvs();
   });
 });
 
