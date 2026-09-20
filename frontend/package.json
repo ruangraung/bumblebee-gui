@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:pages": "node scripts/verify-pages.cjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

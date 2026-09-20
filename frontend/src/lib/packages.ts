@@ -1,4 +1,5 @@
 import type { PackageRecord } from '@/lib/api'
+import { buildCSV } from '@/lib/export'
 
 export const PAGE_SIZE = 50
 
@@ -23,37 +24,17 @@ const EXPORT_COLUMNS: readonly ExportColumn[] = [
   'confidence',
 ]
 
-// RFC 4180: a field is quoted only when it carries a delimiter, a quote, or a
-// newline, and inner quotes are doubled.
-const NEEDS_QUOTING = /[",\n]/
-
-function escapeCSV(value: string): string {
-  if (!NEEDS_QUOTING.test(value)) return value
-  return `"${value.replace(/"/g, '""')}"`
-}
-
 function exportFields(pkg: PackageRecord): string[] {
   return EXPORT_COLUMNS.map((column) => pkg[column] ?? '')
 }
 
 export function packagesToCSV(packages: PackageRecord[]): string {
-  const rows = packages.map((pkg) => exportFields(pkg).map(escapeCSV).join(','))
-  return [EXPORT_COLUMNS.join(','), ...rows].join('\n')
+  return buildCSV(EXPORT_COLUMNS, packages.map(exportFields))
 }
 
 // Clipboard format: no header, tab-separated, so a paste lands as columns.
 export function packagesToTSV(packages: PackageRecord[]): string {
   return packages.map((pkg) => exportFields(pkg).join('\t')).join('\n')
-}
-
-export function downloadTextFile(filename: string, content: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.click()
-  URL.revokeObjectURL(url)
 }
 
 export function getEcosystems(packages: PackageRecord[]): string[] {

@@ -1,4 +1,4 @@
-import type { PackageRecord, ScanRecord } from '@/lib/api'
+import type { FindingRecord, PackageRecord, ScanRecord } from '@/lib/api'
 
 export function isInProgress(status?: string): boolean {
   return status === 'running' || status === 'pending'
@@ -63,4 +63,26 @@ export function noMatchMessage({
 }): string {
   if (search || ecosystem !== 'all') return 'No packages match your filters.'
   return 'No packages found in this scan.'
+}
+
+// The findings page prefers a completed scan that actually produced findings,
+// because a scan with none renders an empty page. Everything else, including
+// the URL-param case, follows the same rule as the results page.
+export function resolveFindingsScan(scans: ScanRecord[], scanId?: string): ScanRecord | null {
+  if (scanId) return resolveActiveScan(scans, scanId)
+  const withFindings = scans.find(
+    (scan) => scan.status === 'completed' && (scan.summary?.findings_count ?? 0) > 0,
+  )
+  return withFindings ?? resolveActiveScan(scans)
+}
+
+// A scan's findings are fetched once, on demand: a completed scan whose
+// findings are still missing from the cache, and no other case.
+export function findingsToFetch(
+  cache: Record<number, FindingRecord[] | undefined>,
+  scan: ScanRecord | null,
+): number | null {
+  if (!scan) return null
+  if (scan.status !== 'completed') return null
+  return cache[scan.id] === undefined ? scan.id : null
 }
