@@ -45,7 +45,7 @@ function FindingCard({ finding }: { finding: FindingRecord }) {
       {finding.catalog_id && (
         <p className="mt-2.5 text-sm text-muted-foreground">
           <span className="font-mono text-foreground">{finding.catalog_id}</span>
-          {finding.catalog_name ? ` — ${finding.catalog_name}` : ''}
+          {finding.catalog_name ? ` · ${finding.catalog_name}` : ''}
         </p>
       )}
       {finding.evidence && (

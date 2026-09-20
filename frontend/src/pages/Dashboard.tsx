@@ -38,7 +38,7 @@ export default function Dashboard() {
       <div className="flex items-end justify-between gap-6">
         <PageHeader
           title="Dashboard"
-          description="A web interface for the Bumblebee CLI supply-chain scanner — inventory dependencies and flag known-vulnerable packages. Your latest scan, summarized."
+          description="Packages, ecosystems, and findings from your latest completed scan, plus any scan still running."
         />
         <Button onClick={() => navigate('/scan')} className="shrink-0">
           <Scan className="mr-1.5 h-4 w-4" />

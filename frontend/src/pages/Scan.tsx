@@ -271,8 +271,8 @@ export default function Scan() {
         {/* Deep-profile hint: the CLI requires explicit roots for deep scans */}
         {deepNeedsRoots && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
-            The <strong>deep</strong> profile requires at least one root directory
-            — add one under <em>Root directories</em> below, or the scan will be
+            The <strong>deep</strong> profile requires at least one root directory.
+            Add one under <em>Root directories</em> below, or the scan will be
             rejected.
           </div>
         )}
@@ -367,7 +367,7 @@ export default function Scan() {
 
           {roots.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No roots configured — scanning from default paths.
+              No roots configured. Scanning from the default paths.
             </p>
           ) : (
             <div className="space-y-2">
