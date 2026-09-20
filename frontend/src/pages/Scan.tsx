@@ -5,59 +5,18 @@ import { useScanStore } from '@/stores/scanStore'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { ScanRequest } from '@/lib/api'
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-type Profile = ScanRequest['profile']
-
-interface Preset {
-  label: string
-  description: string
-  profile: Profile
-  ecosystems: string[]
-  roots: string[]
-}
-
-const ALL_ECOSYSTEMS = [
-  'npm', 'pypi', 'go', 'rubygems', 'packagist',
-  'mcp', 'editor-extension', 'browser-extension',
-]
-
-const DEFAULT_ECOSYSTEMS = ['npm', 'pypi']
-
-const PRESETS: Preset[] = [
-  {
-    label: 'Baseline',
-    description: 'Common ecosystems, quick scan',
-    profile: 'baseline',
-    ecosystems: [...DEFAULT_ECOSYSTEMS],
-    roots: [],
-  },
-  {
-    label: 'Project',
-    description: 'Current project dependencies',
-    profile: 'project',
-    ecosystems: ['npm', 'pypi', 'go', 'rubygems'],
-    roots: ['.'],
-  },
-  {
-    label: 'npm only',
-    description: 'Only the npm ecosystem',
-    profile: 'baseline',
-    ecosystems: ['npm'],
-    roots: [],
-  },
-  {
-    label: 'Deep',
-    description: 'All ecosystems, comprehensive',
-    profile: 'deep',
-    ecosystems: [...ALL_ECOSYSTEMS],
-    roots: [],
-  },
-]
+import {
+  ALL_ECOSYSTEMS,
+  DEFAULT_ECOSYSTEMS,
+  PRESETS,
+  addedRoot,
+  buildScanRequest,
+  presetOpensRoots,
+  scanFormWarnings,
+  validateScanForm,
+  withEcosystemToggled,
+} from '@/lib/scanForm'
+import type { Preset, Profile, ScanFormState } from '@/lib/scanForm'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -126,12 +85,17 @@ export default function Scan() {
   // ---- Local validation error --------------------------------------------
   const [validationError, setValidationError] = useState<string | null>(null)
 
+  const form: ScanFormState = {
+    profile,
+    ecosystems,
+    roots,
+    exposureCatalog,
+    findingsOnly,
+    maxDuration,
+  }
+
   // ---- Derived warnings --------------------------------------------------
-  const usesHomeRoot = roots.some((r) => r === '~' || r.startsWith('~/'))
-  const showHomeRootWarning = usesHomeRoot && profile !== 'deep'
-  // The bumblebee CLI rejects `deep` without explicit roots by design
-  // (incident-response profile refuses to auto-configure).
-  const deepNeedsRoots = profile === 'deep' && roots.length === 0
+  const warnings = scanFormWarnings(form)
 
   // ---- Preset application ------------------------------------------------
   function applyPreset(preset: Preset) {
@@ -140,16 +104,14 @@ export default function Scan() {
     setRoots(preset.roots)
     setActivePreset(preset.label)
     // Land users where the missing input is if the preset needs roots.
-    if (preset.profile === 'deep' && preset.roots.length === 0) {
+    if (presetOpensRoots(preset)) {
       setRootsOpen(true)
     }
   }
 
   // ---- Ecosystem toggles -------------------------------------------------
   function toggleEcosystem(eco: string) {
-    setEcosystems((prev) =>
-      prev.includes(eco) ? prev.filter((e) => e !== eco) : [...prev, eco],
-    )
+    setEcosystems((prev) => withEcosystemToggled(prev, eco))
     setActivePreset(null)
   }
 
@@ -163,10 +125,9 @@ export default function Scan() {
 
   // ---- Root directory management -----------------------------------------
   function addRoot() {
-    const trimmed = newRoot.trim()
-    if (!trimmed) return
-    if (roots.includes(trimmed)) return
-    setRoots((prev) => [...prev, trimmed])
+    const next = addedRoot(roots, newRoot)
+    if (!next) return
+    setRoots(next)
     setNewRoot('')
   }
 
@@ -178,30 +139,15 @@ export default function Scan() {
   async function handleStartScan() {
     setValidationError(null)
 
-    if (ecosystems.length === 0) {
-      setValidationError('Select at least one ecosystem.')
+    const problem = validateScanForm(form)
+    if (problem) {
+      setValidationError(problem.message)
+      if (problem.revealRoots) setRootsOpen(true)
       return
-    }
-
-    if (profile === 'deep' && roots.length === 0) {
-      setValidationError(
-        'The deep profile requires at least one root directory. Add one under "Root directories".',
-      )
-      setRootsOpen(true)
-      return
-    }
-
-    const request: ScanRequest = {
-      profile,
-      ecosystems,
-      roots: roots.length > 0 ? roots : undefined,
-      exposure_catalog: exposureCatalog || undefined,
-      findings_only: findingsOnly,
-      max_duration: maxDuration,
     }
 
     try {
-      const scan = await createScan(request)
+      const scan = await createScan(buildScanRequest(form))
       if (scan?.id) {
         navigate(`/results/${scan.id}`)
       }
@@ -269,7 +215,7 @@ export default function Scan() {
         </div>
 
         {/* Deep-profile hint: the CLI requires explicit roots for deep scans */}
-        {deepNeedsRoots && (
+        {warnings.deepWithoutRoots && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
             The <strong>deep</strong> profile requires at least one root directory.
             Add one under <em>Root directories</em> below, or the scan will be
@@ -357,7 +303,7 @@ export default function Scan() {
             </Button>
           </div>
 
-          {showHomeRootWarning && (
+          {warnings.homeRoot && (
             <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
               Using <code className="font-mono">~</code> as a root without the{' '}
               <strong>deep</strong> profile may produce excessive results. Consider
