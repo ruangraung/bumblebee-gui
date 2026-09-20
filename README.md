@@ -64,6 +64,21 @@ docker compose up -d
 4. Click **Start Scan** — the scan starts in the background
 5. Results appear automatically on the Results page once the scan completes (deep scans can take a few minutes)
 
+### Scanning a directory on the host
+
+The backend runs in a container, so by default a scan sees only the container's own filesystem. To scan a
+directory that lives on the host, mount it read-only at `/host`:
+
+```bash
+BUMBLEBEE_HOST_DIR=/home/you/projects \
+  docker compose -f docker-compose.yml -f docker-compose.host-scan.yml up -d backend
+```
+
+Then use `/host`, or any path under it, as the scan root. The mount is read-only: the scanner reads package
+metadata, and nothing in the container can change what it sees. Everything under the mounted directory does
+become readable by the backend, which listens on localhost only, so mount the narrowest directory that
+answers your question.
+
 ## Architecture
 
 ```
