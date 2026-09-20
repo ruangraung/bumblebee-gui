@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
 import ScanPicker from '@/components/ScanPicker'
 import { Button } from '@/components/ui/button'
+import { FindingsEmptyView, findingsEmptyKind } from '@/components/FindingsEmptyView'
 import { FindingsHeader } from '@/components/FindingsHeader'
 import { FindingsFilters } from '@/components/FindingsFilters'
 import { FindingsSummary } from '@/components/FindingsSummary'
@@ -15,6 +15,8 @@ export default function Findings() {
   const { scans, activeScan, findings, loading, error, clearError } = useActiveFindings(scanId)
   const table = useFindingsTable(findings)
 
+  const emptyKind = findingsEmptyKind({ loading, scans, activeScan, findingsCount: findings.length })
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -25,24 +27,12 @@ export default function Findings() {
     )
   }
 
-  if (!loading && scans.length === 0) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <FindingsHeader />
-        <EmptyState icon message="Run a scan with an exposure catalog to see findings here." />
-      </div>
-    )
+  if (emptyKind !== 'none') {
+    return <FindingsEmptyView kind={emptyKind} scans={scans} activeScan={activeScan} />
   }
 
-  if (!loading && activeScan && findings.length === 0) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-6">
-        <FindingsHeader />
-        <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
-        <EmptyState icon message="No exposure matches were found in this scan." />
-      </div>
-    )
-  }
+  const showSummary = !loading && table.filtered.length > 0
+  const showFilters = findings.length > 0 || loading
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -50,9 +40,9 @@ export default function Findings() {
 
       <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
 
-      {!loading && table.filtered.length > 0 && <FindingsSummary count={table.filtered.length} />}
+      {showSummary && <FindingsSummary count={table.filtered.length} />}
 
-      {(findings.length > 0 || loading) && (
+      {showFilters && (
         <FindingsFilters
           search={table.searchQuery}
           onSearchChange={table.setSearchQuery}
@@ -68,21 +58,6 @@ export default function Findings() {
       <FindingsBody findings={findings} filtered={table.filtered} loading={loading} />
 
       <FindingsExportActions findings={table.filtered} scanId={activeScan?.id} />
-    </div>
-  )
-}
-
-// The two empty states a scan can produce, with the icon marking the one that
-// points at a missing catalog rather than a filtered-out list.
-function EmptyState({ icon, message }: { icon?: boolean; message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
-      {icon && (
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
-          <AlertTriangle className="h-6 w-6" />
-        </div>
-      )}
-      <p className="mt-3 text-sm text-muted-foreground">{message}</p>
     </div>
   )
 }
