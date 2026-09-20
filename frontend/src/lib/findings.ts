@@ -41,8 +41,7 @@ export function getEcosystems(findings: FindingRecord[]): string[] {
 }
 
 // Filters run in the order the page shows them, then severity order decides the
-// ranking. The search query is lowercased but not trimmed, matching the
-// behaviour the page had before this logic moved here.
+// ranking. The query is trimmed, so a stray space does not hide every row.
 export function filterAndSortFindings(
   findings: FindingRecord[],
   { search, severity, ecosystem }: FindingFilters,
@@ -60,7 +59,7 @@ export function filterAndSortFindings(
     )
   }
   if (search.trim()) {
-    const query = search.toLowerCase()
+    const query = search.trim().toLowerCase()
     result = result.filter((finding) => matchesSearch(finding, query))
   }
 

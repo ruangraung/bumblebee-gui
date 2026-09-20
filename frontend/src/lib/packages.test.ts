@@ -46,6 +46,11 @@ describe("packagesToCSV", () => {
     const csv = packagesToCSV([pkg({ project_path: "/home/me,other" })]);
     expect(csv).toContain('"/home/me,other"');
   });
+
+  it("guards a hostile package name", () => {
+    const csv = packagesToCSV([pkg({ package_name: "=1+1" })]);
+    expect(csv.split("\n")[1]).toBe("'=1+1,npm,1.0.0,lockfile,/app,high");
+  });
 });
 
 describe("packagesToTSV", () => {
@@ -61,6 +66,11 @@ describe("packagesToTSV", () => {
 
   it("returns an empty string for no packages", () => {
     expect(packagesToTSV([])).toBe("");
+  });
+
+  it("guards a hostile package name", () => {
+    const tsv = packagesToTSV([pkg({ package_name: "=1+1" })]);
+    expect(tsv).toBe("'=1+1\tnpm\t1.0.0\tlockfile\t/app\thigh");
   });
 });
 
@@ -91,6 +101,11 @@ describe("filterAndSortPackages", () => {
     expect(result).toHaveLength(3);
   });
 
+  it("finds a package when the search carries a trailing space", () => {
+    const result = filterAndSortPackages(all, { search: "react ", ecosystem: "all", sortKey: "name-asc" });
+    expect(result.map((p) => p.package_name)).toEqual(["react", "react-dom"]);
+  });
+
   it("filters to one ecosystem", () => {
     const result = filterAndSortPackages(all, { search: "", ecosystem: "pypi", sortKey: "name-asc" });
     expect(result.map((p) => p.package_name)).toEqual(["requests"]);
@@ -116,10 +131,18 @@ describe("filterAndSortPackages", () => {
     expect(sorted.map((p) => p.package_name)).toEqual(["alpha", "zebra"]);
   });
 
-  it("falls back to the name when the version matches", () => {
+  it("reads a version as a number, so 18.2.0 sorts above 2.31.0", () => {
     const sorted = filterAndSortPackages(all, { search: "", ecosystem: "all", sortKey: "version" });
-    expect(sorted[0].version).toBe("18.2.0");
-    expect(sorted.slice(0, 2).map((p) => p.package_name)).toEqual(["react", "react-dom"]);
+    expect(sorted.map((p) => p.version)).toEqual(["2.31.0", "18.2.0", "18.2.0"]);
+    expect(sorted.slice(1).map((p) => p.package_name)).toEqual(["react", "react-dom"]);
+  });
+
+  it("puts 10.0.0 above 9.0.0", () => {
+    const sorted = filterAndSortPackages(
+      [pkg({ package_name: "nine", version: "9.0.0" }), pkg({ package_name: "ten", version: "10.0.0" })],
+      { search: "", ecosystem: "all", sortKey: "version" },
+    );
+    expect(sorted.map((p) => p.package_name)).toEqual(["nine", "ten"]);
   });
 
   it("does not reorder the caller's array", () => {
