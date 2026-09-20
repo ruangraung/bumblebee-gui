@@ -1,6 +1,4 @@
 import asyncio
-import csv
-import io
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -19,6 +17,7 @@ from .database import (
     insert_scan,
     update_scan_status,
 )
+from .exporters import EXPORT_FORMATS, ExportPayload, build_export_response
 from .models import (
     FindingRecord,
     PackageRecord,
@@ -320,42 +319,5 @@ async def export_scan(
 
     packages = await get_scan_packages(scan_id, scan.ndjson_path)
     findings = await get_scan_findings(scan_id, scan.ndjson_path)
-
-    if format == "json":
-        data = {
-            "scan": scan.model_dump(mode="json"),
-            "packages": [p.model_dump() for p in packages],
-            "findings": [f.model_dump() for f in findings],
-        }
-        content = json.dumps(data, indent=2)
-        return StreamingResponse(
-            io.BytesIO(content.encode("utf-8")),
-            media_type="application/json",
-            headers={"Content-Disposition": f"attachment; filename=scan_{scan_id}.json"},
-        )
-
-    # CSV export
-    output = io.StringIO()
-
-    # Packages section
-    output.write("=== PACKAGES ===\n")
-    if packages:
-        pkg_writer = csv.DictWriter(output, fieldnames=packages[0].model_dump().keys())
-        pkg_writer.writeheader()
-        for p in packages:
-            pkg_writer.writerow(p.model_dump())
-
-    # Findings section
-    output.write("\n=== FINDINGS ===\n")
-    if findings:
-        fnd_writer = csv.DictWriter(output, fieldnames=findings[0].model_dump().keys())
-        fnd_writer.writeheader()
-        for f in findings:
-            fnd_writer.writerow(f.model_dump())
-
-    content = output.getvalue()
-    return StreamingResponse(
-        io.BytesIO(content.encode("utf-8")),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=scan_{scan_id}.csv"},
-    )
+    payload = ExportPayload(scan=scan, packages=packages, findings=findings)
+    return build_export_response(scan_id, payload, EXPORT_FORMATS[format])
