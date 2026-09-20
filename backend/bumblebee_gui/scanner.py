@@ -13,6 +13,17 @@ from .models import (
     FindingRecord,
     ScanProfile,
 )
+from .scanner_logic import (
+    FINDING,
+    PACKAGE,
+    calculate_summary,
+    decode_records,
+    package_record,
+    finding_record,
+    parse_ndjson_output,
+    read_records,
+    record_type,
+)
 
 BINARY_PATH = os.environ.get("BUMBLEBEE_BINARY", "/usr/local/bin/bumblebee")
 DATA_DIR = Path(os.environ.get("BUMBLEBEE_DATA_DIR", Path.home() / ".bumblebee-gui"))
@@ -52,42 +63,6 @@ def generate_ndjson_path(profile: ScanProfile) -> Path:
     """Generate a unique NDJSON file path for a scan."""
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
     return SCANS_DIR / f"{timestamp}_{profile.value}.ndjson"
-
-
-def parse_ndjson_output(output: str) -> tuple[List[dict], List[dict]]:
-    """Parse NDJSON output into packages and findings."""
-    packages = []
-    findings = []
-
-    for line in output.strip().split("\n"):
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-            record_type = record.get("record_type", "")
-            if record_type == "finding":
-                findings.append(record)
-            elif record_type == "package":
-                packages.append(record)
-        except json.JSONDecodeError:
-            continue
-
-    return packages, findings
-
-
-def calculate_summary(packages: List[dict], findings: List[dict]) -> ScanSummary:
-    """Calculate scan summary from parsed data."""
-    ecosystem_counts = {}
-    for pkg in packages:
-        eco = pkg.get("ecosystem", "unknown")
-        ecosystem_counts[eco] = ecosystem_counts.get(eco, 0) + 1
-
-    return ScanSummary(
-        total_packages=len(packages),
-        ecosystems_found=len(ecosystem_counts),
-        findings_count=len(findings),
-        ecosystem_counts=ecosystem_counts,
-    )
 
 
 async def _iter_lines(stream):
@@ -187,81 +162,15 @@ def count_packages(path: Path) -> int:
     """
     if not path.exists():
         return 0
-    count = 0
     with open(path, encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            try:
-                if json.loads(line).get("record_type") == "package":
-                    count += 1
-            except json.JSONDecodeError:
-                continue
-    return count
+        return sum(1 for record in decode_records(f) if record_type(record) == PACKAGE)
 
 
 async def get_scan_packages(scan_id: int, ndjson_path: str) -> List[PackageRecord]:
     """Load packages from a scan's NDJSON file."""
-    path = Path(ndjson_path)
-    if not path.exists():
-        return []
-
-    packages = []
-    for line in path.read_text().strip().split("\n"):
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-            if record.get("record_type") == "package":
-                packages.append(
-                    PackageRecord(
-                        package_name=record.get("package_name", "unknown"),
-                        ecosystem=record.get("ecosystem", "unknown"),
-                        version=record.get("version", "unknown"),
-                        source_type=record.get("source_type"),
-                        source_file=record.get("source_file"),
-                        project_path=record.get("project_path"),
-                        package_manager=record.get("package_manager"),
-                        confidence=record.get("confidence"),
-                        has_lifecycle_scripts=record.get("has_lifecycle_scripts"),
-                    )
-                )
-        except json.JSONDecodeError:
-            continue
-
-    return packages
+    return [package_record(record) for record in read_records(Path(ndjson_path), PACKAGE)]
 
 
 async def get_scan_findings(scan_id: int, ndjson_path: str) -> List[FindingRecord]:
     """Load findings from a scan's NDJSON file."""
-    path = Path(ndjson_path)
-    if not path.exists():
-        return []
-
-    findings = []
-    for line in path.read_text().strip().split("\n"):
-        if not line:
-            continue
-        try:
-            record = json.loads(line)
-            if record.get("record_type") == "finding":
-                findings.append(
-                    FindingRecord(
-                        package_name=record.get("package_name", "unknown"),
-                        version=record.get("version", "unknown"),
-                        ecosystem=record.get("ecosystem", "unknown"),
-                        severity=record.get("severity", "info"),
-                        catalog_id=record.get("catalog_id", ""),
-                        catalog_name=record.get("catalog_name", ""),
-                        evidence=record.get("evidence", ""),
-                        source_file=record.get("source_file"),
-                        source_type=record.get("source_type"),
-                        root_kind=record.get("root_kind"),
-                        project_path=record.get("project_path"),
-                        confidence=record.get("confidence"),
-                    )
-                )
-        except json.JSONDecodeError:
-            continue
-
-    return findings
+    return [finding_record(record) for record in read_records(Path(ndjson_path), FINDING)]
