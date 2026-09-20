@@ -17,6 +17,21 @@ UNKNOWN = "unknown"
 INFO = "info"
 
 
+def repeat_option(flag: str, values: Optional[Iterable[str]]) -> List[str]:
+    """A CLI flag repeated once per value, empty when there are no values."""
+    return [argument for value in values or () for argument in (flag, value)]
+
+
+def valued_option(flag: str, value: Optional[str]) -> List[str]:
+    """A CLI flag with a single value, omitted when the value is unset."""
+    return [flag, value] if value else []
+
+
+def toggle_option(flag: str, enabled: bool) -> List[str]:
+    """A boolean CLI flag, present only when enabled."""
+    return [flag] if enabled else []
+
+
 def record_type(record: dict) -> str:
     """Record type tag of an NDJSON record, empty string when it has none."""
     return record.get("record_type", "")

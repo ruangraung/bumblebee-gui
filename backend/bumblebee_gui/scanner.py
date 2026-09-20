@@ -23,6 +23,9 @@ from .scanner_logic import (
     parse_ndjson_output,
     read_records,
     record_type,
+    repeat_option,
+    toggle_option,
+    valued_option,
 )
 
 BINARY_PATH = os.environ.get("BUMBLEBEE_BINARY", "/usr/local/bin/bumblebee")
@@ -38,24 +41,11 @@ def ensure_dirs():
 def build_command(request: ScanRequest) -> List[str]:
     """Build Bumblebee CLI command from scan request."""
     cmd = [BINARY_PATH, "scan", "--profile", request.profile.value]
-
-    if request.ecosystems:
-        for eco in request.ecosystems:
-            cmd.extend(["--ecosystem", eco])
-
-    if request.roots:
-        for root in request.roots:
-            cmd.extend(["--root", root])
-
-    if request.exposure_catalog:
-        cmd.extend(["--exposure-catalog", request.exposure_catalog])
-
-    if request.findings_only:
-        cmd.append("--findings-only")
-
-    if request.max_duration:
-        cmd.extend(["--max-duration", request.max_duration])
-
+    cmd += repeat_option("--ecosystem", request.ecosystems)
+    cmd += repeat_option("--root", request.roots)
+    cmd += valued_option("--exposure-catalog", request.exposure_catalog)
+    cmd += toggle_option("--findings-only", request.findings_only)
+    cmd += valued_option("--max-duration", request.max_duration)
     return cmd
 
 
