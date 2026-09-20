@@ -5,7 +5,6 @@ import {
   Table,
   AlertTriangle,
   Settings,
-  Bug,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -56,9 +55,9 @@ export default function Sidebar() {
     <aside className="flex h-screen w-60 flex-col border-r border-border bg-card">
       {/* Brand */}
       <div className="flex items-center gap-2.5 border-b border-border px-4 py-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Bug className="h-4 w-4" />
-        </div>
+        {/* Empty alt on purpose: the brand name sits right beside it, so a label
+            here would be announced twice. */}
+        <img src="/bumblebee.svg" alt="" width={28} height={28} className="h-7 w-7 rounded-md" />
         <div className="leading-tight">
           <p className="text-sm font-semibold tracking-tight">Bumblebee GUI</p>
           <p className="font-mono text-[10px] leading-relaxed text-muted-foreground">

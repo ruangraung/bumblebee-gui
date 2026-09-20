@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Bumblebee">
+  <title>Bumblebee</title>
+  <!-- Honey-amber tile painted with the primary token from src/index.css, so the
+       tab icon and the sidebar mark are one asset and cannot drift apart. -->
+  <rect width="32" height="32" rx="7" fill="hsl(43 96% 56%)"/>
+  <defs>
+    <clipPath id="abdomen">
+      <ellipse cx="15" cy="17.5" rx="7.5" ry="5.5"/>
+    </clipPath>
+  </defs>
+  <!-- Wings first: the body then overlaps their lower edges, which is what makes
+       them read as folded against the back instead of floating. -->
+  <g fill="#FFFFFF" opacity="0.95">
+    <ellipse cx="13.6" cy="10.6" rx="5.4" ry="2.9" transform="rotate(-16 13.6 10.6)"/>
+    <ellipse cx="9" cy="12.4" rx="3.6" ry="2.2" transform="rotate(-30 9 12.4)"/>
+  </g>
+  <path d="M8.4 17.5 L5.2 17.5 L8.4 16.2 Z" fill="#17161A"/>
+  <ellipse cx="15" cy="17.5" rx="7.5" ry="5.5" fill="#17161A"/>
+  <!-- Stripes use the tile colour, so they read as cut-outs rather than paint. -->
+  <g clip-path="url(#abdomen)" fill="hsl(43 96% 56%)">
+    <rect x="12.1" y="10" width="2.3" height="15"/>
+    <rect x="17.4" y="10" width="2.3" height="15"/>
+  </g>
+  <!-- Head only, no antennae: at 16px they merged with the head into a smudge
+       (checked against a magnified 16px raster), and the stripes, wings and head
+       already carry the read on their own. -->
+  <circle cx="24.4" cy="15.4" r="3.5" fill="#17161A"/>
+</svg>
