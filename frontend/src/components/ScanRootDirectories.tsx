@@ -1,6 +1,8 @@
 import { Plus, X } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
+import { HostMountNotice } from '@/components/HostMountNotice'
 
 interface ScanRootDirectoriesProps {
   roots: string[]
@@ -33,6 +35,8 @@ export function ScanRootDirectories({
       open={open}
       onToggle={onToggle}
     >
+      <HostMountNotice />
+
       <p className="mb-3 text-sm text-muted-foreground">
         Paths are resolved inside the scan container, which reads only its own
         filesystem until a host directory is mounted into it. To scan code from

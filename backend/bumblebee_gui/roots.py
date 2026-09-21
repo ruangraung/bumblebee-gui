@@ -109,3 +109,43 @@ def root_problems(
         for problem in (problem_for_root(root, host_mount) for root in roots or ())
         if problem
     ]
+
+
+# A directory listing is for picking a root by eye, not for walking a tree.
+LISTING_LIMIT = 200
+
+
+def inside_mount(path: str, host_mount: Path = HOST_MOUNT) -> bool:
+    """Whether a path is the host mount or a directory below it.
+
+    The listing endpoint is confined to the mount on purpose: the scanner is a
+    container, and this exposes what it was given rather than the filesystem it
+    runs on.
+    """
+    candidate = Path(path).resolve()
+    root = host_mount.resolve()
+    return candidate == root or root in candidate.parents
+
+
+def host_mount_report(
+    path: str = "", host_mount: Path = HOST_MOUNT, limit: int = LISTING_LIMIT
+) -> dict:
+    """What the host mount holds, for the requested directory.
+
+    ``mounted`` false is a state the UI shows rather than an error: the scanner
+    still runs, it just reads nothing but its own environment.
+    """
+    target = Path(path) if path else host_mount
+    if not host_mount.is_dir():
+        return {"mounted": False, "path": str(target), "parent": None, "directories": []}
+
+    directories = sorted(
+        str(entry) for entry in _entries(target) if entry.is_dir()
+    )[:limit]
+    at_root = target.resolve() == host_mount.resolve()
+    return {
+        "mounted": True,
+        "path": str(target),
+        "parent": None if at_root else str(target.parent),
+        "directories": directories,
+    }

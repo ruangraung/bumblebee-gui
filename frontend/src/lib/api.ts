@@ -25,6 +25,13 @@ export interface ScanRecord {
   packages_found?: number
 }
 
+export interface HostMountReport {
+  mounted: boolean
+  path: string
+  parent?: string
+  directories: string[]
+}
+
 export interface PackageRecord {
   package_name: string
   ecosystem: string
@@ -94,6 +101,11 @@ export const api = {
   async listScans(limit?: number): Promise<ScanRecord[]> {
     const params = limit ? `?limit=${limit}` : ''
     return request(`/api/scans${params}`)
+  },
+
+  async hostDirectories(path?: string): Promise<HostMountReport> {
+    const params = path ? `?path=${encodeURIComponent(path)}` : ''
+    return request(`/api/host-directories${params}`)
   },
 
   async getScan(id: number): Promise<ScanRecord> {

@@ -2,7 +2,13 @@
 
 from pathlib import Path
 
-from bumblebee_gui.roots import directories_on_offer, problem_for_root, root_problems
+from bumblebee_gui.roots import (
+    directories_on_offer,
+    host_mount_report,
+    inside_mount,
+    problem_for_root,
+    root_problems,
+)
 
 
 def _project_like(path: Path) -> Path:
@@ -108,3 +114,47 @@ def test_directories_on_offer_lists_directories_only(tmp_path):
 
 def test_directories_on_offer_is_empty_without_a_mount(tmp_path):
     assert directories_on_offer(tmp_path / "absent") == []
+
+
+def test_inside_mount_accepts_the_mount_and_its_children(tmp_path):
+    mount = tmp_path / "host"
+    project = _project_like(mount / "projects")
+
+    assert inside_mount(str(mount), mount)
+    assert inside_mount(str(project), mount)
+
+
+def test_inside_mount_refuses_anything_outside(tmp_path):
+    mount = tmp_path / "host"
+    mount.mkdir()
+
+    assert not inside_mount(str(tmp_path / "elsewhere"), mount)
+    assert not inside_mount("/etc", mount)
+
+
+def test_mount_report_lists_directories_at_the_root(tmp_path):
+    mount = tmp_path / "host"
+    project = _project_like(mount / "projects")
+    (mount / "README.md").write_text("hi")
+
+    report = host_mount_report(host_mount=mount)
+
+    assert report["mounted"] is True
+    assert report["directories"] == [str(project)]
+    assert report["parent"] is None
+
+
+def test_mount_report_names_the_parent_below_the_root(tmp_path):
+    mount = tmp_path / "host"
+    inner = _project_like(mount / "projects" / "api")
+
+    report = host_mount_report(str(inner), host_mount=mount)
+
+    assert report["parent"] == str(inner.parent)
+
+
+def test_mount_report_says_so_when_nothing_is_mounted(tmp_path):
+    report = host_mount_report(host_mount=tmp_path / "absent")
+
+    assert report["mounted"] is False
+    assert report["directories"] == []
