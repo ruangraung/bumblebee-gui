@@ -37,10 +37,10 @@ export const PRESETS: Preset[] = [
   },
   {
     label: 'Project',
-    description: 'Current project dependencies',
+    description: 'Dependencies in the mounted /scan directory',
     profile: 'project',
     ecosystems: ['npm', 'pypi', 'go', 'rubygems'],
-    roots: ['.'],
+    roots: ['/scan'],
   },
   {
     label: 'npm only',

@@ -8,6 +8,12 @@ services:
     volumes:
       - ./backend:/app
       - bumblebee-data:/root/.bumblebee-gui
+      # The scanner runs inside this container, so it can only read what is
+      # mounted here. /scan is the one directory a scan can reach: point
+      # BUMBLEBEE_SCAN_DIR at whatever you want to scan and use /scan as the
+      # root in the UI. Read-only, because a scan never needs to write, and a
+      # tool that reports on a tree should not be able to change it.
+      - ${BUMBLEBEE_SCAN_DIR:-.}:/scan:ro
     environment:
       - BUMBLEBEE_DATA_DIR=/root/.bumblebee-gui
 
