@@ -4,6 +4,7 @@ import type { ScanRecord } from '@/lib/api'
 import { comparedLine } from '@/lib/scans'
 import { scanVerdict } from '@/lib/verdict'
 import { cn } from '@/lib/utils'
+import { CatalogueLine } from '@/components/CatalogueLine'
 
 // The scan's conclusion, above the table. A package list leaves the reader to
 // work out whether anything matched, and on a table of several hundred rows the
@@ -20,25 +21,28 @@ export function ScanVerdict({ scan }: { scan: ScanRecord | null }) {
         verdict.clean ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-amber-500/30 bg-amber-500/5',
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         {verdict.clean ? (
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
         ) : (
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
         )}
-        <p className="text-sm">
-          {verdict.clean ? (
-            <span className="font-medium">{verdict.label}</span>
-          ) : (
-            <Link
-              to={`/findings/${scan.id}`}
-              className="font-medium underline underline-offset-4 hover:text-foreground"
-            >
-              {verdict.label}
-            </Link>
-          )}
-          <span className="text-muted-foreground"> · {comparedLine(scan)}</span>
-        </p>
+        <div className="space-y-1">
+          <p className="text-sm">
+            {verdict.clean ? (
+              <span className="font-medium">{verdict.label}</span>
+            ) : (
+              <Link
+                to={`/findings/${scan.id}`}
+                className="font-medium underline underline-offset-4 hover:text-foreground"
+              >
+                {verdict.label}
+              </Link>
+            )}
+            <span className="text-muted-foreground"> · {comparedLine(scan)}</span>
+          </p>
+          <CatalogueLine />
+        </div>
       </div>
 
       {scan.ndjson_path && (

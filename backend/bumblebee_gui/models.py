@@ -42,6 +42,15 @@ class HostMountReport(BaseModel):
     directories: List[str] = []
 
 
+class CatalogueSummary(BaseModel):
+    """The catalogues behind a scan: what it compared packages against."""
+
+    catalogues: int
+    entries: int
+    versions: int
+    available: bool
+
+
 class ScanRecord(BaseModel):
     id: int
     timestamp: datetime

@@ -475,3 +475,30 @@ def test_host_directories_walks_below_the_mount(client, monkeypatch, tmp_path):
 
     assert body["directories"] == [str(inner)]
     assert body["parent"] == str(mount)
+
+
+def test_exposure_catalog_counts_the_installed_catalogues(client, monkeypatch, tmp_path):
+    catalogue = tmp_path / "catalogues"
+    catalogue.mkdir()
+    (catalogue / "campaign.json").write_text(
+        json.dumps({"entries": [{"id": "a", "versions": ["1.0.0", "1.0.1"]}]})
+    )
+    monkeypatch.setattr("bumblebee_gui.main.THREAT_INTEL_DIR", catalogue)
+
+    body = client.get("/api/exposure-catalog").json()
+
+    assert body == {
+        "catalogues": 1,
+        "entries": 1,
+        "versions": 2,
+        "available": True,
+    }
+
+
+def test_exposure_catalog_reports_an_image_without_catalogues(client, monkeypatch, tmp_path):
+    monkeypatch.setattr("bumblebee_gui.main.THREAT_INTEL_DIR", tmp_path / "absent")
+
+    body = client.get("/api/exposure-catalog").json()
+
+    assert body["available"] is False
+    assert body["versions"] == 0

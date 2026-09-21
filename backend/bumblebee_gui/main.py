@@ -14,6 +14,7 @@ from .api_helpers import (
     require_scan,
     require_scan_data,
 )
+from .catalogue import catalogue_summary
 from .database import (
     delete_scan,
     fail_stale_running_scans,
@@ -25,6 +26,7 @@ from .database import (
 )
 from .exporters import EXPORT_FORMATS, ExportPayload, build_export_response
 from .models import (
+    CatalogueSummary,
     FindingRecord,
     HostMountReport,
     PackageRecord,
@@ -34,6 +36,7 @@ from .models import (
 )
 from .roots import HOST_MOUNT, host_mount_report, inside_mount, root_problems
 from .scanner import (
+    THREAT_INTEL_DIR,
     generate_ndjson_path,
     get_scan_findings,
     get_scan_packages,
@@ -131,6 +134,17 @@ async def host_directories(path: str = Query(default="")) -> HostMountReport:
             status_code=400, detail=f"{path} is outside the host mount {HOST_MOUNT}."
         )
     return HostMountReport(**host_mount_report(path, HOST_MOUNT))
+
+
+@app.get("/api/exposure-catalog", response_model=CatalogueSummary)
+async def exposure_catalogue() -> CatalogueSummary:
+    """What the scanner compares packages against, counted from the catalogues
+    it was given.
+
+    A scan that matched nothing means one thing when a thousand package versions
+    were compared, and something else entirely when none were.
+    """
+    return CatalogueSummary(**catalogue_summary(THREAT_INTEL_DIR))
 
 
 async def _run_scan_background(
