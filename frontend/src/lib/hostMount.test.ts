@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { mountNotice } from '@/lib/hostMount'
+import { directoryName, mountNotice } from '@/lib/hostMount'
 
 const report = (over: Partial<Parameters<typeof mountNotice>[0] & object> = {}) => ({
   mounted: true,
@@ -43,5 +43,20 @@ describe('mountNotice', () => {
 
     expect(notice.tone).toBe('warning')
     expect(notice.text).toContain('BUMBLEBEE_HOST_DIR')
+  })
+})
+
+describe('directoryName', () => {
+  it('keeps the last segment', () => {
+    expect(directoryName('/host/projects/api')).toBe('api')
+  })
+
+  it('handles a trailing slash and a bare segment', () => {
+    expect(directoryName('/host/projects/')).toBe('projects')
+    expect(directoryName('projects')).toBe('projects')
+  })
+
+  it('falls back to the path when there is no segment', () => {
+    expect(directoryName('/')).toBe('/')
   })
 })

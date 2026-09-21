@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CollapsibleSection } from '@/components/CollapsibleSection'
 import { HostMountNotice } from '@/components/HostMountNotice'
+import { HostRootPicker } from '@/components/HostRootPicker'
 
 interface ScanRootDirectoriesProps {
   roots: string[]
@@ -12,6 +13,7 @@ interface ScanRootDirectoriesProps {
   onToggle: () => void
   onNewRootChange: (value: string) => void
   onAdd: () => void
+  onAddPath: (root: string) => void
   onRemove: (root: string) => void
 }
 
@@ -26,6 +28,7 @@ export function ScanRootDirectories({
   onToggle,
   onNewRootChange,
   onAdd,
+  onAddPath,
   onRemove,
 }: ScanRootDirectoriesProps) {
   return (
@@ -47,6 +50,8 @@ export function ScanRootDirectories({
         <code className="font-mono">~/code</code>, does not exist in the
         container and the scan will fail.
       </p>
+
+      <HostRootPicker roots={roots} onAddPath={onAddPath} />
 
       <div className="mb-3 flex gap-2">
         <input

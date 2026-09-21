@@ -30,6 +30,7 @@ export default function Scan() {
     selectAllEcosystems,
     clearAllEcosystems,
     addRoot,
+    addRootPath,
     removeRoot,
     warnings,
     validationError,
@@ -99,6 +100,7 @@ export default function Scan() {
           onToggle={() => toggleSection('roots')}
           onNewRootChange={setNewRoot}
           onAdd={addRoot}
+          onAddPath={addRootPath}
           onRemove={removeRoot}
         />
 
