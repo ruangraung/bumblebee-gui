@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FindingRecord, PackageRecord, ScanRecord } from "@/lib/api";
 import {
+  comparedLine,
   findingsToFetch,
   isInProgress,
   noMatchMessage,
@@ -189,5 +190,20 @@ describe("findingsToFetch", () => {
 
   it("does not ask without a scan", () => {
     expect(findingsToFetch({}, null)).toBeNull();
+  });
+});
+
+describe("comparedLine", () => {
+  it("counts what was examined", () => {
+    expect(comparedLine(scan({ summary: summary({ total_packages: 780 }) }))).toBe("780 packages examined.");
+  });
+
+  it("reads a single package in the singular", () => {
+    expect(comparedLine(scan({ summary: summary({ total_packages: 1 }) }))).toBe("1 package examined.");
+  });
+
+  it("says so when the scan recorded no count", () => {
+    expect(comparedLine(scan())).toBe("This scan recorded no package count.");
+    expect(comparedLine(null)).toBe("This scan recorded no package count.");
   });
 });

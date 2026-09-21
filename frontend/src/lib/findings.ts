@@ -1,5 +1,6 @@
-import type { FindingRecord } from '@/lib/api'
+import type { FindingRecord, ScanRecord } from '@/lib/api'
 import { buildCSV } from '@/lib/export'
+import { isInProgress } from '@/lib/scans'
 import { bySeverity } from '@/lib/severity'
 
 export interface FindingFilters {
@@ -77,4 +78,35 @@ export function findingsToCSV(findings: FindingRecord[]): string {
 // Before a scan is selected there is no id, so an export is named "latest".
 export function findingsFilename(scanId: number | undefined, extension: 'json' | 'csv'): string {
   return `findings-${scanId ?? 'latest'}.${extension}`
+}
+
+// Which empty layout the findings page shows, if any. The four cases stay apart
+// because they say different things, and two of them must never be reported as a
+// scan that matched nothing: one that is still running, and one that failed. The
+// results page already tells those apart; the findings page did not.
+export type FindingsEmptyKind = 'none' | 'no-scans' | 'running' | 'failed' | 'no-findings'
+
+export interface FindingsEmptyInput {
+  loading: boolean
+  scans: ScanRecord[]
+  activeScan: ScanRecord | null
+  findingsCount: number
+}
+
+export function findingsEmptyKind(state: FindingsEmptyInput): FindingsEmptyKind {
+  if (state.loading) return 'none'
+  if (state.scans.length === 0) return 'no-scans'
+  if (state.activeScan === null) return 'none'
+  if (state.activeScan.status === 'failed') return 'failed'
+  if (isInProgress(state.activeScan.status)) return 'running'
+  if (state.findingsCount === 0) return 'no-findings'
+  return 'none'
+}
+
+// One message per case, so a case cannot be added without one.
+export const FINDINGS_EMPTY_MESSAGES: Record<Exclude<FindingsEmptyKind, 'none'>, string> = {
+  'no-scans': 'Run a scan to see exposure matches here.',
+  running: 'This scan is still running. Matches appear here when it finishes.',
+  failed: 'This scan failed, so nothing was compared.',
+  'no-findings': 'No exposure matches were found in this scan.',
 }

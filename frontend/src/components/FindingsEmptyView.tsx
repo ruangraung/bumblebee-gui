@@ -1,35 +1,38 @@
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Scan } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import type { ScanRecord } from '@/lib/api'
 import ScanPicker from '@/components/ScanPicker'
 import { FindingsHeader } from '@/components/FindingsHeader'
+import { FINDINGS_EMPTY_MESSAGES, type FindingsEmptyKind } from '@/lib/findings'
+import { comparedLine } from '@/lib/scans'
+import { cn } from '@/lib/utils'
 
-export type FindingsEmptyKind = 'none' | 'no-scans' | 'no-findings'
+type ShownKind = Exclude<FindingsEmptyKind, 'none'>
 
-interface FindingsEmptyState {
-  loading: boolean
-  scans: ScanRecord[]
-  activeScan: ScanRecord | null
-  findingsCount: number
-}
-
-// Which empty layout applies, if any. A failed catalog match and the absence of
-// any scan at all read differently to a user, and only the second one can offer
-// a scan to switch to.
-export function findingsEmptyKind(state: FindingsEmptyState): FindingsEmptyKind {
-  if (state.loading) return 'none'
-  if (state.scans.length === 0) return 'no-scans'
-  if (state.activeScan === null) return 'none'
-  if (state.findingsCount === 0) return 'no-findings'
-  return 'none'
-}
-
-const EMPTY_MESSAGES: Record<Exclude<FindingsEmptyKind, 'none'>, string> = {
-  'no-scans': 'Run a scan to see exposure matches here.',
-  'no-findings': 'No exposure matches were found in this scan.',
+// One icon and one tone per case. A scan that ran and matched nothing is the
+// page working, so it gets a check. A scan that failed, or that never ran, gets
+// neither the check nor the tone.
+const CASES: Record<ShownKind, { icon: LucideIcon; tone: string }> = {
+  'no-findings': {
+    icon: CheckCircle2,
+    tone: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  },
+  running: {
+    icon: Clock,
+    tone: 'border-border bg-muted text-muted-foreground',
+  },
+  failed: {
+    icon: AlertTriangle,
+    tone: 'border-red-500/25 bg-red-500/10 text-red-600 dark:text-red-400',
+  },
+  'no-scans': {
+    icon: Scan,
+    tone: 'border-border bg-muted text-muted-foreground',
+  },
 }
 
 interface FindingsEmptyViewProps {
-  kind: Exclude<FindingsEmptyKind, 'none'>
+  kind: ShownKind
   scans: ScanRecord[]
   activeScan: ScanRecord | null
 }
@@ -41,18 +44,23 @@ export function FindingsEmptyView({ kind, scans, activeScan }: FindingsEmptyView
       {kind === 'no-findings' && (
         <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
       )}
-      <EmptyState message={EMPTY_MESSAGES[kind]} />
+      <EmptyState kind={kind} scan={activeScan} />
     </div>
   )
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ kind, scan }: { kind: ShownKind; scan: ScanRecord | null }) {
+  const { icon: Icon, tone } = CASES[kind]
+
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
-        <AlertTriangle className="h-6 w-6" />
+      <div className={cn('flex h-12 w-12 items-center justify-center rounded-lg border', tone)}>
+        <Icon className="h-6 w-6" />
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">{message}</p>
+      <p className="mt-3 text-sm text-muted-foreground">{FINDINGS_EMPTY_MESSAGES[kind]}</p>
+      {kind === 'no-findings' && (
+        <p className="mt-1 text-sm text-muted-foreground">{comparedLine(scan)}</p>
+      )}
     </div>
   )
 }

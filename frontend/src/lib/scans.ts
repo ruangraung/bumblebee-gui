@@ -93,3 +93,12 @@ export function findingsToFetch(
   if (scan.status !== 'completed') return null
   return cache[scan.id] === undefined ? scan.id : null
 }
+
+// The count of what was examined, shown under an empty findings page. A report
+// of no matches on its own reads as though nothing was looked at, and this count
+// is what separates that from a scan that walked the tree and matched nothing.
+export function comparedLine(scan: ScanRecord | null): string {
+  const total = scan?.summary?.total_packages
+  if (typeof total !== 'number') return 'This scan recorded no package count.'
+  return `${total} ${total === 1 ? 'package' : 'packages'} examined.`
+}
