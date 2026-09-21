@@ -26,12 +26,13 @@ from .database import (
 from .exporters import EXPORT_FORMATS, ExportPayload, build_export_response
 from .models import (
     FindingRecord,
+    HostMountReport,
     PackageRecord,
     ScanRecord,
     ScanRequest,
     ScanStatus,
 )
-from .roots import root_problems
+from .roots import HOST_MOUNT, host_mount_report, inside_mount, root_problems
 from .scanner import (
     generate_ndjson_path,
     get_scan_findings,
@@ -115,6 +116,21 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "version": "0.1.0"}
+
+
+@app.get("/api/host-directories", response_model=HostMountReport)
+async def host_directories(path: str = Query(default="")) -> HostMountReport:
+    """Directories inside the host mount, for choosing a scan root.
+
+    Confined to the mount: the scanner is a container, and this reports what it
+    was given instead of browsing the filesystem it runs on. An unmounted host
+    is reported rather than refused, because the scan form shows that state.
+    """
+    if path and not inside_mount(path, HOST_MOUNT):
+        raise HTTPException(
+            status_code=400, detail=f"{path} is outside the host mount {HOST_MOUNT}."
+        )
+    return HostMountReport(**host_mount_report(path, HOST_MOUNT))
 
 
 async def _run_scan_background(

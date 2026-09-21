@@ -33,6 +33,15 @@ class ScanSummary(BaseModel):
     ecosystem_counts: dict[str, int]
 
 
+class HostMountReport(BaseModel):
+    """What the host mount offers, for the scan form to show."""
+
+    mounted: bool
+    path: str
+    parent: Optional[str] = None
+    directories: List[str] = []
+
+
 class ScanRecord(BaseModel):
     id: int
     timestamp: datetime

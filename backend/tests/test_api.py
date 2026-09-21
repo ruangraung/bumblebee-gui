@@ -431,3 +431,47 @@ def test_create_scan_accepts_a_root_it_can_read(client, tmp_path):
     )
 
     assert response.status_code == 202
+
+
+def test_host_directories_reports_the_mount(client, monkeypatch, tmp_path):
+    mount = tmp_path / "host"
+    project = mount / "projects"
+    project.mkdir(parents=True)
+    monkeypatch.setattr("bumblebee_gui.main.HOST_MOUNT", mount)
+
+    body = client.get("/api/host-directories").json()
+
+    assert body["mounted"] is True
+    assert body["directories"] == [str(project)]
+
+
+def test_host_directories_reports_an_absent_mount(client, monkeypatch, tmp_path):
+    monkeypatch.setattr("bumblebee_gui.main.HOST_MOUNT", tmp_path / "absent")
+
+    body = client.get("/api/host-directories").json()
+
+    assert body["mounted"] is False
+
+
+def test_host_directories_refuses_a_path_outside_the_mount(client, monkeypatch, tmp_path):
+    mount = tmp_path / "host"
+    mount.mkdir()
+    monkeypatch.setattr("bumblebee_gui.main.HOST_MOUNT", mount)
+
+    response = client.get("/api/host-directories", params={"path": "/etc"})
+
+    assert response.status_code == 400
+
+
+def test_host_directories_walks_below_the_mount(client, monkeypatch, tmp_path):
+    mount = tmp_path / "host"
+    inner = mount / "projects" / "api"
+    inner.mkdir(parents=True)
+    monkeypatch.setattr("bumblebee_gui.main.HOST_MOUNT", mount)
+
+    body = client.get(
+        "/api/host-directories", params={"path": str(mount / "projects")}
+    ).json()
+
+    assert body["directories"] == [str(inner)]
+    assert body["parent"] == str(mount)
