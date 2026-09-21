@@ -34,11 +34,14 @@ export function ScanRootDirectories({
       onToggle={onToggle}
     >
       <p className="mb-3 text-sm text-muted-foreground">
-        Paths are resolved inside the scan container, which can only read what
-        is mounted into it: <code className="font-mono">/scan</code>. A path
-        from your own machine, such as{' '}
-        <code className="font-mono">~/code</code>, does not exist there and the
-        scan will fail.
+        Paths are resolved inside the scan container, which reads only its own
+        filesystem until a host directory is mounted into it. To scan code from
+        this machine, mount a directory read-only at{' '}
+        <code className="font-mono">/host</code> (the README shows the command)
+        and use <code className="font-mono">/host</code> or a path under it as
+        the root. A path from your own machine, such as{' '}
+        <code className="font-mono">~/code</code>, does not exist in the
+        container and the scan will fail.
       </p>
 
       <div className="mb-3 flex gap-2">
@@ -47,7 +50,7 @@ export function ScanRootDirectories({
           value={newRoot}
           onChange={(e) => onNewRootChange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), onAdd())}
-          placeholder="/scan or /scan/my-project"
+          placeholder="/host or /host/my-project"
           className="h-9 flex-1 rounded-md border border-input bg-background px-3 font-mono text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
         <Button
