@@ -32,6 +32,13 @@ export interface HostMountReport {
   directories: string[]
 }
 
+export interface CatalogueSummary {
+  catalogues: number
+  entries: number
+  versions: number
+  available: boolean
+}
+
 export interface PackageRecord {
   package_name: string
   ecosystem: string
@@ -106,6 +113,10 @@ export const api = {
   async hostDirectories(path?: string): Promise<HostMountReport> {
     const params = path ? `?path=${encodeURIComponent(path)}` : ''
     return request(`/api/host-directories${params}`)
+  },
+
+  async exposureCatalogue(): Promise<CatalogueSummary> {
+    return request('/api/exposure-catalog')
   },
 
   async getScan(id: number): Promise<ScanRecord> {

@@ -9,10 +9,13 @@ export interface MountNotice {
 // down for no gain.
 const SHOWN = 8
 
+// The last segment of a container path, for a list that shows names.
+export function directoryName(path: string): string {
+  return path.split('/').filter(Boolean).pop() ?? path
+}
+
 function nameList(directories: string[]): string {
-  const names = directories
-    .slice(0, SHOWN)
-    .map((path) => path.split('/').filter(Boolean).pop() ?? path)
+  const names = directories.slice(0, SHOWN).map(directoryName)
   const rest = directories.length - names.length
   return rest > 0 ? `${names.join(', ')}, and ${rest} more` : names.join(', ')
 }

@@ -82,6 +82,14 @@ export function useScanForm() {
     setNewRoot('')
   }
 
+  // A directory chosen from the mounted list rather than typed. Same rules: a
+  // blank or an already-listed root changes nothing.
+  function addRootPath(root: string) {
+    const next = addedRoot(roots, root)
+    if (!next) return
+    setRoots(next)
+  }
+
   function removeRoot(root: string) {
     setRoots((prev) => prev.filter((item) => item !== root))
   }
@@ -126,6 +134,7 @@ export function useScanForm() {
     selectAllEcosystems,
     clearAllEcosystems,
     addRoot,
+    addRootPath,
     removeRoot,
     warnings,
     validationError,
