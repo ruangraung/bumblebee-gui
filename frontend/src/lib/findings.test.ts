@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { FindingRecord } from "@/lib/api";
-import { filterAndSortFindings, findingsFilename, findingsToCSV } from "@/lib/findings";
+import type { FindingRecord, ScanRecord } from "@/lib/api";
+import {
+  filterAndSortFindings,
+  findingsEmptyKind,
+  findingsFilename,
+  findingsToCSV,
+} from "@/lib/findings";
 
 function finding(overrides: Partial<FindingRecord> = {}): FindingRecord {
   return {
@@ -67,5 +72,74 @@ describe("findingsFilename", () => {
 
   it("falls back to latest before a scan is committed", () => {
     expect(findingsFilename(undefined, "json")).toBe("findings-latest.json");
+  });
+});
+
+describe("findingsEmptyKind", () => {
+  function scan(overrides: Partial<ScanRecord> = {}): ScanRecord {
+    return {
+      id: 1,
+      timestamp: "2026-09-20T16:00:00.000Z",
+      profile: "baseline",
+      status: "completed",
+      ...overrides,
+    };
+  }
+
+  function finished(findingsCount: number): ScanRecord {
+    return scan({
+      summary: {
+        total_packages: 780,
+        ecosystems_found: 2,
+        findings_count: findingsCount,
+        ecosystem_counts: { npm: 740, pypi: 40 },
+      },
+    });
+  }
+
+  it("shows the table while the findings are still loading", () => {
+    expect(findingsEmptyKind({ loading: true, scans: [], activeScan: null, findingsCount: 0 })).toBe(
+      "none",
+    );
+  });
+
+  it("prompts for a scan when none has run", () => {
+    expect(findingsEmptyKind({ loading: false, scans: [], activeScan: null, findingsCount: 0 })).toBe(
+      "no-scans",
+    );
+  });
+
+  it("reports a running scan as running, not as a scan that matched nothing", () => {
+    const running = scan({ status: "running" });
+    expect(
+      findingsEmptyKind({ loading: false, scans: [running], activeScan: running, findingsCount: 0 }),
+    ).toBe("running");
+  });
+
+  it("keeps a failed scan out of the no-matches case", () => {
+    const failed = scan({ status: "failed" });
+    expect(
+      findingsEmptyKind({ loading: false, scans: [failed], activeScan: failed, findingsCount: 0 }),
+    ).toBe("failed");
+  });
+
+  it("reads an empty result from a finished scan as no matches", () => {
+    const clean = finished(0);
+    expect(
+      findingsEmptyKind({ loading: false, scans: [clean], activeScan: clean, findingsCount: 0 }),
+    ).toBe("no-findings");
+  });
+
+  it("shows the table once the scan has matches", () => {
+    const matched = finished(3);
+    expect(
+      findingsEmptyKind({ loading: false, scans: [matched], activeScan: matched, findingsCount: 3 }),
+    ).toBe("none");
+  });
+
+  it("shows the table when a selected scan is missing from the list", () => {
+    expect(
+      findingsEmptyKind({ loading: false, scans: [scan()], activeScan: null, findingsCount: 0 }),
+    ).toBe("none");
   });
 });

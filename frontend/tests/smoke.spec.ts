@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 
 const BASE_URL = process.env.BASE_URL || 'http://localhost:5173'
 const API_URL = process.env.API_URL || 'http://localhost:8001'
@@ -24,39 +24,57 @@ test.describe('API Health', () => {
 })
 
 // ============================================
-// UI Smoke Tests
+// Route contract
 // ============================================
 
-test.describe('UI Smoke Tests', () => {
-  test('dashboard loads', async ({ page }) => {
-    await page.goto(BASE_URL)
-    await expect(page.locator('h2')).toContainText('Dashboard')
-  })
+// Each route renders its own page, and none of them logs an error on the way
+// in. The error assertion is the point: a page whose data fetch fails still
+// answers 200 and still renders a heading, so a title check on its own stays
+// green while the page is unusable. Locators are role based, because bare text
+// and tag locators match several nodes on these pages and turn into strict mode
+// violations rather than useful failures.
+const ROUTES: { path: string; heading: string }[] = [
+  { path: '/', heading: 'Dashboard' },
+  { path: '/scan', heading: 'New scan' },
+  { path: '/results', heading: 'Results' },
+  { path: '/findings', heading: 'Findings' },
+  { path: '/settings', heading: 'Settings' },
+]
 
-  test('scan page renders', async ({ page }) => {
-    await page.goto(`${BASE_URL}/scan`)
-    await expect(page.locator('text=Baseline')).toBeVisible()
-  })
+// The heading renders before the route's own fetches resolve, so allow them a
+// moment to fail loudly instead of asserting on a half loaded page.
+const SETTLE_MS = 700
 
-  test('results page renders', async ({ page }) => {
-    await page.goto(`${BASE_URL}/results`)
-    // Should show either results table or empty state
-    await expect(page.locator('h2')).toBeVisible()
+function collectErrors(page: Page): string[] {
+  const errors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text())
   })
+  page.on('pageerror', (error) => errors.push(error.message))
+  return errors
+}
 
-  test('findings page renders', async ({ page }) => {
-    await page.goto(`${BASE_URL}/findings`)
-    await expect(page.locator('h2')).toBeVisible()
-  })
+test.describe('Route contract', () => {
+  for (const route of ROUTES) {
+    test(`${route.path} renders ${route.heading} without console errors`, async ({ page }) => {
+      const errors = collectErrors(page)
 
-  test('settings page renders', async ({ page }) => {
-    await page.goto(`${BASE_URL}/settings`)
-    await expect(page.locator('h2')).toBeVisible()
-  })
+      await page.goto(`${BASE_URL}${route.path}`)
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(route.heading)
+
+      if (route.path === '/scan') {
+        await expect(page.getByRole('button', { name: /start scan/i })).toBeVisible()
+      }
+
+      await page.waitForTimeout(SETTLE_MS)
+
+      expect(errors).toEqual([])
+    })
+  }
 })
 
 // ============================================
-// Screenshot Tests
+// Screenshots
 // ============================================
 
 test.describe('Screenshots', () => {

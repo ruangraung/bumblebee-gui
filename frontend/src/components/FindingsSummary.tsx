@@ -8,7 +8,7 @@ export function FindingsSummary({ count }: { count: number }) {
       <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
       <p className="text-sm">
         <span className="font-mono font-medium">{count}</span>{' '}
-        {count === 1 ? 'package' : 'packages'} match your exposure catalog
+        {count === 1 ? 'package matches' : 'packages match'} your exposure catalog
       </p>
     </div>
   )

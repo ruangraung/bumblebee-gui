@@ -4,6 +4,7 @@ import ScanPicker from '@/components/ScanPicker'
 import { Button } from '@/components/ui/button'
 import { PackageFilters } from '@/components/PackageFilters'
 import { ResultsHeader } from '@/components/ResultsHeader'
+import { ScanVerdict } from '@/components/ScanVerdict'
 import { ResultsBody } from '@/components/ResultsBody'
 import { ResultsSummary } from '@/components/ResultsSummary'
 import { ExportActions } from '@/components/ExportActions'
@@ -35,6 +36,7 @@ export default function Results() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <ResultsHeader scan={activeScan} packageCount={packages.length} />
+      <ScanVerdict scan={activeScan} />
       <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/results" />
 
       {packages.length > 0 && (

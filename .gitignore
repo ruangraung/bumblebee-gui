@@ -83,3 +83,7 @@ docs/
 
 # Hermes workspace notes (never commit to public repo)
 .hermes/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
