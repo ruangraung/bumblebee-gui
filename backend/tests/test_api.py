@@ -386,3 +386,48 @@ def test_scan_events_deliver_progress_payload(client, monkeypatch, tmp_path):
 
     progress_values = [p["packages_found"] for p in _sse_data(body) if p["type"] == "progress"]
     assert 7 in progress_values
+
+
+def test_create_scan_refuses_a_root_the_scanner_cannot_read(client):
+    response = client.post(
+        "/api/scans", json={"profile": "project", "roots": ["/no/such/tree"]}
+    )
+
+    assert response.status_code == 422
+    assert "reports no packages" in response.json()["detail"]
+
+
+def test_create_scan_refuses_an_empty_root(client, tmp_path):
+    empty = tmp_path / "empty-root"
+    empty.mkdir()
+
+    response = client.post(
+        "/api/scans", json={"profile": "project", "roots": [str(empty)]}
+    )
+
+    assert response.status_code == 422
+    assert "is empty" in response.json()["detail"]
+
+
+def test_create_scan_refuses_every_unreadable_root_at_once(client):
+    response = client.post(
+        "/api/scans",
+        json={"profile": "project", "roots": ["/no/such/tree", "/nor/this/one"]},
+    )
+
+    detail = response.json()["detail"]
+
+    assert response.status_code == 422
+    assert len(detail.splitlines()) == 2
+
+
+def test_create_scan_accepts_a_root_it_can_read(client, tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "package.json").write_text("{}")
+
+    response = client.post(
+        "/api/scans", json={"profile": "project", "roots": [str(root)]}
+    )
+
+    assert response.status_code == 202

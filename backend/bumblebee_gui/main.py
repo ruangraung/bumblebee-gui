@@ -31,6 +31,7 @@ from .models import (
     ScanRequest,
     ScanStatus,
 )
+from .roots import root_problems
 from .scanner import (
     generate_ndjson_path,
     get_scan_findings,
@@ -148,7 +149,15 @@ async def _run_scan_background(
 @app.post("/api/scans", response_model=ScanRecord, status_code=202)
 async def create_scan(request: ScanRequest):
     """Submit a new scan. Runs in the background; poll
-    GET /api/scans/{scan_id} for status transitions to completed/failed."""
+    GET /api/scans/{scan_id} for status transitions to completed/failed.
+
+    A root the scanner cannot read is refused here with 422, naming the
+    directories it can read instead.
+    """
+    problems = root_problems(request.roots)
+    if problems:
+        raise HTTPException(status_code=422, detail="\n".join(problems))
+
     # The output path is decided up front so the record carries it from the
     # start — a cancelled scan can then clean up its partial file.
     ndjson_path = generate_ndjson_path(request.profile)
