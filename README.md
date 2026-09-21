@@ -171,6 +171,9 @@ docker compose logs -f
 docker compose down
 ```
 
+Dependencies for the frontend are installed inside the image, so there is nothing to run on the host. Edits
+under `frontend/src` and `backend/bumblebee_gui` reload on their own.
+
 ### Without Docker
 
 ```bash
