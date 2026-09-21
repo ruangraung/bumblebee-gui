@@ -19,8 +19,14 @@ services:
       - "127.0.0.1:5173:5173"
     volumes:
       - ./frontend:/app
+      # The image installs its dependencies into /app/node_modules. Without a
+      # volume here, the source mount above hides them behind an empty
+      # directory on any machine that has not run npm install itself, and the
+      # dev server exits with "vite: not found".
+      - frontend-node-modules:/app/node_modules
     depends_on:
       - backend
 
 volumes:
   bumblebee-data:
+  frontend-node-modules:
