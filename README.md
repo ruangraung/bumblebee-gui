@@ -33,6 +33,9 @@ docker compose up -d
 Then open <http://localhost:5173>. The API listens on <http://localhost:8001> and documents itself at
 <http://localhost:8001/docs>.
 
+A scan reads the filesystem inside the container, which is the Python environment the scanner itself runs in.
+That makes a useful smoke test, but it says nothing about your machine. Mount a directory to scan real code.
+
 ### Your first scan
 
 1. Open the **Scan** page.
@@ -46,13 +49,27 @@ The backend runs in a container, so by default a scan sees only the container's 
 directory that lives on the host, mount it read-only at `/host`:
 
 ```bash
+cd bumblebee-gui        # the compose files live in the repo root
 BUMBLEBEE_HOST_DIR=/home/you/projects \
   docker compose -f docker-compose.yml -f docker-compose.host-scan.yml up -d backend
+
+docker compose exec backend ls /host    # must list your projects, not be empty
 ```
 
-Then use `/host`, or any path under it, as the scan root. The mount is read-only, so nothing in the container
-can change what the scanner sees. Everything under that directory does become readable by the backend, which
-listens on localhost only, so mount the narrowest directory that answers your question.
+`/host` **is** the directory named in `BUMBLEBEE_HOST_DIR`. With `BUMBLEBEE_HOST_DIR=$HOME/projects`, a
+repository at `~/projects/api` is scanned with the root `/host/api`, and `/host` on its own scans everything
+under the mount. The **Project** preset already uses `/host` as its root.
+
+A path from your machine is not a path inside the container. `~`, `~/projects` and `/Users/you/projects` do
+not exist there, and typing one cannot reach your files. `/host`, or a path under it, is the only form that
+works.
+
+If `BUMBLEBEE_HOST_DIR` names a directory that does not exist, Docker creates it empty, and the mount is empty
+with it. The `ls /host` line above is what catches that before a scan reports nothing.
+
+The mount is read-only, so nothing in the container can change what the scanner sees. Everything under that
+directory does become readable by the backend, which listens on localhost only, so mount the narrowest
+directory that answers your question.
 
 ## Exposure catalogues
 
@@ -62,6 +79,12 @@ points the scanner at them, so a scan reports real matches without any setup.
 The catalogues come from upstream's `threat_intel` set, pinned at tag `v0.1.2`: **eleven catalogues, 1,072
 entries**, covering npm, pypi, rubygems, go, packagist and editor-extension. Each one describes a real
 published campaign, with its source report attached.
+
+Matching is exact: a package is reported when its ecosystem, name and version are all one of those 1,072
+entries. A scan that reports no matches has found that none of the packages it saw is on the list, which is a
+narrow result worth reading carefully. The catalogues record specific compromised releases rather than a
+general vulnerability database, so a package the list does not mention is not covered by it, and a clean scan
+is not a claim that everything it scanned is safe.
 
 | What the scan request says | What the scan compares against |
 |---|---|
@@ -143,8 +166,12 @@ and removes the partial output.
 | Profile | Use case | Scans |
 |---------|----------|-------|
 | `baseline` | Daily lightweight inventory | Global package roots, toolchains, extensions |
-| `project` | Project workspace inventory | Configured dev directories |
+| `project` | Project workspace inventory | The mounted `/host` directory |
 | `deep` | Incident response | Explicit root paths, full home directory |
+
+`deep` is the incident-response profile and refuses to run without an explicit root, because it will not guess
+which paths matter. The scan form's max duration defaults to `10m`, which a deep scan of a whole home
+directory can exceed.
 
 ## What has actually been tested
 
@@ -153,7 +180,7 @@ Honest table, because a README that claims more than it has run is worse than a 
 | Path | Status |
 |---|---|
 | Linux with Docker Compose | **Verified.** Scans of a 780 package tree, catalogue matching against a compromised fixture, the full test suite and all five CI gates |
-| macOS with Docker Compose | **Not tested by us yet.** Expected to work, since the scanner runs inside the Linux container |
+| macOS with Docker Compose | **Verified.** A fresh clone on macOS under OrbStack, mounting a home directory and scanning it. OrbStack has to be granted access to the mounted directory, or the mount reads as empty inside the container |
 | Windows | **No native path.** Upstream publishes no Windows build of the scanner. Docker Desktop runs the Linux container, so it may well work, but nothing has been checked there |
 | Native install without Docker | A development path only. Nothing has been verified and `install.sh` does not produce a working setup yet |
 
