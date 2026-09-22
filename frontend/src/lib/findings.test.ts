@@ -123,6 +123,40 @@ describe("findingsEmptyKind", () => {
     ).toBe("failed");
   });
 
+  // A truncated scan must not be reported as one that matched nothing, and a
+  // truncated scan that did match something still gets the table.
+  const truncated = (findingsCount: number) =>
+    scan({
+      summary: {
+        total_packages: findingsCount > 0 ? 300 : 0,
+        ecosystems_found: findingsCount > 0 ? 1 : 0,
+        findings_count: findingsCount,
+        ecosystem_counts: findingsCount > 0 ? { npm: 300 } : {},
+        timed_out: true,
+        duration_ms: findingsCount > 0 ? 50 : 1,
+        files_considered: findingsCount > 0 ? 6000 : 16,
+      },
+    });
+
+  const truncatedCases: { name: string; findingsCount: number; expected: string }[] = [
+    { name: "stopped at the time limit with no matches", findingsCount: 0, expected: "partial" },
+    { name: "stopped at the time limit but matched something", findingsCount: 2, expected: "none" },
+  ];
+
+  for (const c of truncatedCases) {
+    it(`keeps a scan that ${c.name} out of the no-matches case`, () => {
+      const stopped = truncated(c.findingsCount);
+      expect(
+        findingsEmptyKind({
+          loading: false,
+          scans: [stopped],
+          activeScan: stopped,
+          findingsCount: c.findingsCount,
+        }),
+      ).toBe(c.expected);
+    });
+  }
+
   it("reads an empty result from a finished scan as no matches", () => {
     const clean = finished(0);
     expect(

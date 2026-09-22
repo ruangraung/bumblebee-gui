@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, Scan } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Scan, Timer } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { ScanRecord } from '@/lib/api'
 import ScanPicker from '@/components/ScanPicker'
@@ -11,11 +11,16 @@ type ShownKind = Exclude<FindingsEmptyKind, 'none'>
 
 // One icon and one tone per case. A scan that ran and matched nothing is the
 // page working, so it gets a check. A scan that failed, or that never ran, gets
-// neither the check nor the tone.
+// neither the check nor the tone. A scan that stopped at its time limit gets the
+// amber tone, because its result is not a conclusion either way.
 const CASES: Record<ShownKind, { icon: LucideIcon; tone: string }> = {
   'no-findings': {
     icon: CheckCircle2,
     tone: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  },
+  partial: {
+    icon: Timer,
+    tone: 'border-amber-500/25 bg-amber-500/10 text-amber-600 dark:text-amber-400',
   },
   running: {
     icon: Clock,
@@ -58,7 +63,7 @@ function EmptyState({ kind, scan }: { kind: ShownKind; scan: ScanRecord | null }
         <Icon className="h-6 w-6" />
       </div>
       <p className="mt-3 text-sm text-muted-foreground">{FINDINGS_EMPTY_MESSAGES[kind]}</p>
-      {kind === 'no-findings' && (
+      {(kind === 'no-findings' || kind === 'partial') && (
         <p className="mt-1 text-sm text-muted-foreground">{comparedLine(scan)}</p>
       )}
     </div>

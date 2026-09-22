@@ -1,4 +1,5 @@
 import type { ScanRecord } from '@/lib/api'
+import { partialNote } from '@/lib/scans'
 
 // The scan's conclusion, for the strip above the package table. It reads the
 // scan's own summary rather than the loaded rows: the table is filtered,
@@ -17,9 +18,8 @@ export function scanVerdict(scan: ScanRecord | null): ScanVerdict | null {
   if (!scan || scan.status !== 'completed' || !summary) return null
 
   const matched = summary.findings_count
-  const timedOut = summary.timed_out === true
 
-  if (timedOut) {
+  if (summary.timed_out === true) {
     return {
       matched,
       clean: false,
@@ -27,7 +27,7 @@ export function scanVerdict(scan: ScanRecord | null): ScanVerdict | null {
         matched === 0
           ? 'Scan stopped at the time limit'
           : `${matched} catalogue ${matched === 1 ? 'match' : 'matches'}`,
-      note: 'Results are partial. The scan did not finish walking the tree.',
+      note: partialNote(scan) ?? undefined,
     }
   }
 

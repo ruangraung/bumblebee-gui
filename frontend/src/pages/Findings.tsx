@@ -41,7 +41,7 @@ export default function Findings() {
 
       <ScanPicker scans={scans} activeId={activeScan?.id} basePath="/findings" />
 
-      {showSummary && <FindingsSummary count={table.filtered.length} />}
+      {showSummary && <FindingsSummary count={table.filtered.length} scan={activeScan} />}
 
       {showFilters && (
         <FindingsFilters

@@ -80,11 +80,12 @@ export function findingsFilename(scanId: number | undefined, extension: 'json' |
   return `findings-${scanId ?? 'latest'}.${extension}`
 }
 
-// Which empty layout the findings page shows, if any. The four cases stay apart
-// because they say different things, and two of them must never be reported as a
-// scan that matched nothing: one that is still running, and one that failed. The
-// results page already tells those apart; the findings page did not.
-export type FindingsEmptyKind = 'none' | 'no-scans' | 'running' | 'failed' | 'no-findings'
+// Which empty layout the findings page shows, if any. The cases stay apart
+// because they say different things, and three of them must never be reported as
+// a scan that matched nothing: one still running, one that failed, and one that
+// stopped at its time limit with part of the tree never visited. The results
+// page already tells those apart; the findings page did not.
+export type FindingsEmptyKind = 'none' | 'no-scans' | 'running' | 'failed' | 'partial' | 'no-findings'
 
 export interface FindingsEmptyInput {
   loading: boolean
@@ -97,10 +98,26 @@ export function findingsEmptyKind(state: FindingsEmptyInput): FindingsEmptyKind 
   if (state.loading) return 'none'
   if (state.scans.length === 0) return 'no-scans'
   if (state.activeScan === null) return 'none'
-  if (state.activeScan.status === 'failed') return 'failed'
-  if (isInProgress(state.activeScan.status)) return 'running'
-  if (state.findingsCount === 0) return 'no-findings'
-  return 'none'
+
+  const unfinished = unfinishedKind(state.activeScan.status)
+  if (unfinished) return unfinished
+
+  return emptyResultKind(state.activeScan, state.findingsCount)
+}
+
+// A scan that failed, or that has not finished, has no result to read, and must
+// never be reported as a scan that matched nothing.
+function unfinishedKind(status: string): FindingsEmptyKind | null {
+  if (status === 'failed') return 'failed'
+  if (isInProgress(status)) return 'running'
+  return null
+}
+
+// Which empty layout a finished scan gets, if any: rows to show, or a result
+// that matched nothing, or one cut short before it covered the tree.
+function emptyResultKind(scan: ScanRecord, findingsCount: number): FindingsEmptyKind {
+  if (findingsCount > 0) return 'none'
+  return scan.summary?.timed_out === true ? 'partial' : 'no-findings'
 }
 
 // One message per case, so a case cannot be added without one.
@@ -108,5 +125,7 @@ export const FINDINGS_EMPTY_MESSAGES: Record<Exclude<FindingsEmptyKind, 'none'>,
   'no-scans': 'Run a scan to see exposure matches here.',
   running: 'This scan is still running. Matches appear here when it finishes.',
   failed: 'This scan failed, so nothing was compared.',
+  partial:
+    'This scan stopped at its time limit, so packages it never reached are not covered here.',
   'no-findings': 'No exposure matches were found in this scan.',
 }
