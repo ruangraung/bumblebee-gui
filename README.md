@@ -69,6 +69,16 @@ works.
 If `BUMBLEBEE_HOST_DIR` names a directory that does not exist, Docker creates it empty, and the mount is empty
 with it. The `ls /host` line above is what catches that before a scan reports nothing.
 
+Every command that names `docker-compose.host-scan.yml` needs `BUMBLEBEE_HOST_DIR` set, because that file
+requires it. Compose refuses the command otherwise, and that includes stopping the stack:
+
+```bash
+BUMBLEBEE_HOST_DIR=/home/you/projects \
+  docker compose -f docker-compose.yml -f docker-compose.host-scan.yml down
+```
+
+Commands that name only `docker-compose.yml`, including the `docker compose exec` line above, do not need it.
+
 The mount is read-only, so nothing in the container can change what the scanner sees. Everything under that
 directory does become readable by the backend, which listens on localhost only, so mount the narrowest
 directory that answers your question.
