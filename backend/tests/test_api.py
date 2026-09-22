@@ -47,6 +47,14 @@ def client(monkeypatch, tmp_path):
         yield test_client
 
 
+def test_scanner_endpoint_reports_a_version_or_says_why_not(client):
+    """The About panel needs a version or a reason, never a silent blank."""
+    body = client.get("/api/scanner").json()
+
+    assert set(body) == {"version", "commit", "error"}
+    assert body["version"] is not None or body["error"] is not None
+
+
 def _wait_for_terminal(client, scan_id, attempts=50, sleep_s=0.05):
     """Poll until the scan reaches a terminal state; return the record."""
     for _ in range(attempts):

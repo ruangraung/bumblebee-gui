@@ -210,3 +210,25 @@ class PackageProgress:
             return False
         self._last_emit = now
         return True
+
+
+CLI_NAME = "bumblebee"
+SHORT_COMMIT = 7
+
+
+def parse_cli_version(text: str) -> tuple[Optional[str], Optional[str]]:
+    """The version and commit from a ``bumblebee version`` run.
+
+    The CLI prints a header line naming itself, then ``key: value`` lines. A
+    shape this build does not recognise yields None rather than a guess, and the
+    About panel then reports that the version could not be read.
+    """
+    version = None
+    commit = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if version is None and stripped.startswith(f"{CLI_NAME} "):
+            version = stripped.split(None, 1)[1].strip() or None
+        elif stripped.startswith("commit:"):
+            commit = stripped.split(":", 1)[1].strip()[:SHORT_COMMIT] or None
+    return version, commit

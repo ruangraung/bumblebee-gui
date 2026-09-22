@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Sun, Moon, Monitor, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { AboutPanel } from '@/components/AboutPanel'
 import { Button } from '@/components/ui/button'
 import { PRESETS } from '@/lib/scanForm'
 import { useScanHistory } from '@/hooks/useScanHistory'
@@ -53,7 +54,7 @@ export default function Settings() {
     <div className="mx-auto max-w-3xl space-y-8">
       <PageHeader
         title="Settings"
-        description="Appearance, scan presets, and data management."
+        description="Appearance, scan presets, data management, and what this install is running."
       />
 
       {/* Appearance */}
@@ -132,6 +133,11 @@ export default function Settings() {
             )}
           </Button>
         </div>
+      </Section>
+
+      {/* About */}
+      <Section title="About">
+        <AboutPanel />
       </Section>
     </div>
   )

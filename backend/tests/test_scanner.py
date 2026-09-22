@@ -473,3 +473,19 @@ def test_empty_catalog_string_disables_the_bundled_dir(monkeypatch, tmp_path):
     req = ScanRequest(profile=ScanProfile.baseline, exposure_catalog="")
     cmd = scanner.build_command(req)
     assert "--exposure-catalog" not in cmd
+
+
+def test_cli_version_reads_the_version_and_short_commit():
+    output = (
+        "bumblebee v0.1.2\n"
+        "commit: cc57710eeaf685e7b89924a36c8583cad0a378fe\n"
+        "built:  2026-06-18T15:03:13Z\n"
+        "go:     go1.25.11\n"
+    )
+
+    assert scanner.parse_cli_version(output) == ("v0.1.2", "cc57710")
+
+
+def test_cli_version_reports_nothing_it_cannot_parse():
+    assert scanner.parse_cli_version("nothing familiar here\n") == (None, None)
+    assert scanner.parse_cli_version("") == (None, None)
