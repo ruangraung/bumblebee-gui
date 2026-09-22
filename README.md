@@ -97,6 +97,11 @@ is built, because this data decides whether a package gets reported as malicious
 snapshot rather than a feed: a new campaign reaches the image when the pinned commit is bumped, which shows up
 as a reviewable change to the digests.
 
+That pin is checked weekly by [`.github/workflows/catalogue-pin.yml`](.github/workflows/catalogue-pin.yml), which
+compares the pinned commit with upstream's latest release, checks each manifest digest against the file at that
+commit, and reports the entry count in the run log. It reads only and opens nothing. A failed run means the pin
+is behind a published release, or a digest no longer matches, and the fix is a bump pull request.
+
 To use your own, put a path in the scan form's exposure catalogue field. A file or a directory of `.json`
 catalogues both work.
 
