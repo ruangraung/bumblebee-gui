@@ -43,5 +43,5 @@ Prefixes, loosely [Conventional Commits](https://www.conventionalcommits.org/): 
 
 ## Reporting security problems
 
-A private reporting channel is not set up yet. If you have found something, open an issue that says you have a
-security problem without the details, and a maintainer will get in touch to arrange a private conversation.
+Use the private route described in [SECURITY.md](SECURITY.md) rather than a public issue. A public issue that
+describes a vulnerability before it is fixed puts everyone running this tool at risk.

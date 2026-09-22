@@ -3,6 +3,8 @@
 A web interface for [Bumblebee](https://github.com/perplexityai/bumblebee), the open source supply chain
 security scanner from Perplexity AI.
 
+This is an unofficial interface for that scanner. It is not affiliated with or endorsed by Perplexity AI.
+
 Bumblebee walks a filesystem, reads package metadata across a dozen ecosystems, and reports anything that
 matches a published compromise. It is a CLI, which suits some people and not others. Bumblebee GUI wraps it in
 a web app: point it at a directory, run a scan, watch progress stream in, and read the result as a table you
@@ -175,8 +177,8 @@ and removes the partial output.
 | `deep` | Incident response | Explicit root paths, full home directory |
 
 `deep` is the incident-response profile and refuses to run without an explicit root, because it will not guess
-which paths matter. The scan form's max duration defaults to `10m`, which a deep scan of a whole home
-directory can exceed.
+which paths matter. The scan form leaves max duration empty by default, which sends no limit at all and keeps
+the scanner's own behaviour. Set `30s`, `10m` or `2h` to cap a scan, or `0` for no limit.
 
 ## What has actually been tested
 

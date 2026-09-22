@@ -1,6 +1,6 @@
 # CI — supply-chain + secret + dependency-audit + build gates.
 #
-# Runs on push to main/refactor/v2 and every pull request.
+# Runs on push to main and every pull request.
 #
 # Layered security model:
 #   - Socket (supply-chain + SAST)  -> malicious-package / code-level gate
@@ -18,7 +18,7 @@ name: CI
 
 on:
   push:
-    branches: [main, refactor/v2]
+    branches: [main]
   pull_request:
 
 concurrency:
