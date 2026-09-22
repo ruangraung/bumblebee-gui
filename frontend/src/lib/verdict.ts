@@ -9,6 +9,7 @@ export interface ScanVerdict {
   matched: number
   clean: boolean
   label: string
+  note?: string
 }
 
 export function scanVerdict(scan: ScanRecord | null): ScanVerdict | null {
@@ -16,6 +17,20 @@ export function scanVerdict(scan: ScanRecord | null): ScanVerdict | null {
   if (!scan || scan.status !== 'completed' || !summary) return null
 
   const matched = summary.findings_count
+  const timedOut = summary.timed_out === true
+
+  if (timedOut) {
+    return {
+      matched,
+      clean: false,
+      label:
+        matched === 0
+          ? 'Scan stopped at the time limit'
+          : `${matched} catalogue ${matched === 1 ? 'match' : 'matches'}`,
+      note: 'Results are partial. The scan did not finish walking the tree.',
+    }
+  }
+
   return {
     matched,
     clean: matched === 0,

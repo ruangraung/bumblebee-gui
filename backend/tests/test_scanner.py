@@ -193,6 +193,58 @@ def test_calculate_summary_unknown_ecosystem():
     assert summary.ecosystem_counts == {"unknown": 1}
 
 
+# ── coverage_fields ──────────────────────────────────────────────────────────
+
+
+def test_coverage_fields_empty_when_no_summary():
+    assert scanner.coverage_fields("") == {}
+
+
+def test_coverage_fields_reads_last_summary():
+    text = "\n".join(
+        [
+            json.dumps({"record_type": "package", "package_name": "a"}),
+            json.dumps(
+                {"record_type": "scan_summary", "timed_out": False, "duration_ms": 50, "files_considered": 120}
+            ),
+        ]
+    )
+    assert scanner.coverage_fields(text) == {
+        "timed_out": False,
+        "duration_ms": 50,
+        "files_considered": 120,
+    }
+
+
+def test_coverage_fields_marks_a_truncated_scan():
+    text = json.dumps(
+        {"record_type": "scan_summary", "timed_out": True, "duration_ms": 53, "files_considered": 6455}
+    )
+    fields = scanner.coverage_fields(text)
+    assert fields["timed_out"] is True
+    assert fields["duration_ms"] == 53
+    assert fields["files_considered"] == 6455
+
+
+def test_calculate_summary_carries_coverage():
+    coverage = {"timed_out": True, "duration_ms": 53, "files_considered": 6455}
+    summary = scanner.calculate_summary(
+        [{"ecosystem": "npm"}], [{"severity": "high"}], coverage
+    )
+    assert summary.timed_out is True
+    assert summary.duration_ms == 53
+    assert summary.files_considered == 6455
+    assert summary.total_packages == 1
+    assert summary.findings_count == 1
+
+
+def test_calculate_summary_without_coverage_defaults():
+    summary = scanner.calculate_summary([], [])
+    assert summary.timed_out is False
+    assert summary.duration_ms is None
+    assert summary.files_considered is None
+
+
 # ── get_scan_packages / get_scan_findings (NDJSON → record mapping) ─────────
 
 

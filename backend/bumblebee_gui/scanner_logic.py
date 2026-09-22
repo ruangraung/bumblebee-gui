@@ -14,6 +14,7 @@ from .models import FindingRecord, PackageRecord, ScanSummary
 
 PACKAGE = "package"
 FINDING = "finding"
+SUMMARY = "scan_summary"
 UNKNOWN = "unknown"
 INFO = "info"
 
@@ -81,8 +82,27 @@ def parse_ndjson_output(output: str) -> tuple[List[dict], List[dict]]:
     return records_by_type(records, PACKAGE), records_by_type(records, FINDING)
 
 
-def calculate_summary(packages: List[dict], findings: List[dict]) -> ScanSummary:
-    """Calculate scan summary from parsed data."""
+def coverage_fields(text: str) -> dict:
+    """Coverage facts from the CLI's scan_summary record, empty when absent.
+
+    The CLI exits 0 on a scan it stopped at its own time limit, so this record
+    is the only place the truncation appears.
+    """
+    summaries = records_by_type(decode_ndjson(text), SUMMARY)
+    if not summaries:
+        return {}
+    last = summaries[-1]
+    return {
+        "timed_out": bool(last.get("timed_out")),
+        "duration_ms": last.get("duration_ms"),
+        "files_considered": last.get("files_considered"),
+    }
+
+
+def calculate_summary(
+    packages: List[dict], findings: List[dict], coverage: Optional[dict] = None
+) -> ScanSummary:
+    """Calculate scan summary from parsed records and the coverage facts."""
     ecosystem_counts = {}
     for pkg in packages:
         eco = pkg.get("ecosystem", UNKNOWN)
@@ -93,6 +113,7 @@ def calculate_summary(packages: List[dict], findings: List[dict]) -> ScanSummary
         ecosystems_found=len(ecosystem_counts),
         findings_count=len(findings),
         ecosystem_counts=ecosystem_counts,
+        **(coverage or {}),
     )
 
 
