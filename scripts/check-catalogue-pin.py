@@ -21,7 +21,9 @@ raw.githubusercontent.com, and nothing is written outside stdout. Exit code 0
 means current and verified, 1 means the report found a problem, 2 means the
 check could not be completed.
 
-Stdlib only, so a runner needs no install step.
+Stdlib only, so a runner needs no install step. The GitHub API allows 60
+unauthenticated requests an hour, which a few local runs exhaust, so set
+GITHUB_TOKEN when running it by hand; the workflow passes the default token.
 """
 
 from __future__ import annotations
@@ -48,6 +50,9 @@ MANIFEST_LINE = re.compile(r"^([0-9a-fA-F]{64})\s+(\S+)$")
 EXIT_OK = 0
 EXIT_PROBLEM = 1
 EXIT_UNKNOWN = 2
+
+LABEL_WIDTH = 15
+DETAIL_INDENT = 18
 
 
 class Unreachable(Exception):
@@ -174,11 +179,111 @@ def check_digests(repo: str, pinned: str, digests: dict[str, str], token: str | 
     return {"ok": ok, "mismatched": mismatched, "unreadable": unreadable, "entries": entries}
 
 
-def upstream_files(repo: str, pinned: str, token: str | None) -> tuple[list[str], list[str]]:
+def upstream_files(repo: str, pinned: str, token: str | None) -> list[str]:
     listing = get_json(
         f"https://api.github.com/repos/{repo}/contents/{CATALOGUE_DIR}?ref={pinned}", token
     )
-    return sorted(entry["name"] for entry in listing if entry["name"].endswith(".json")), []
+    return sorted(entry["name"] for entry in listing if entry["name"].endswith(".json"))
+
+
+def emit(label: str, value: str) -> None:
+    print(f"  {label:<{LABEL_WIDTH}} {value}")
+
+
+def detail(text: str) -> None:
+    print(f"{'':<{DETAIL_INDENT}}{text}")
+
+
+def print_pin_source(pinned: str, digest_count: int) -> None:
+    print("Catalogue pin check")
+    emit("pinned commit", f"{pinned}  (from {DOCKERFILE.name})")
+    emit("manifest", f"{MANIFEST.name}: {digest_count} file(s) listed")
+
+
+def print_pin_state(repo: str, pinned: str, token: str | None) -> tuple[dict, str]:
+    release = latest_release(repo, token)
+    pinned_tag = tag_for_commit(repo, pinned, token)
+    state, sentence = pin_status(repo, pinned, release, token)
+    emit("pinned tag", pinned_tag or "no upstream tag points at this commit")
+    emit("upstream latest", f"{release['tag']} released {release['published_at']}")
+    emit("pin status", f"{state.upper()}: {sentence}")
+    return release, state
+
+
+def manifest_problems(malformed: list[str]) -> list[str]:
+    for line in malformed:
+        detail(f"MALFORMED  {line}")
+    if not malformed:
+        return []
+    return [f"{len(malformed)} manifest line(s) are not 'sha256  name'"]
+
+
+def state_problems(state: str, release: dict) -> list[str]:
+    if state == "ahead":
+        detail(
+            "note: the pin is not the commit of a published release,"
+            " so there is no release to be behind"
+        )
+        return []
+    if state == "stale":
+        return [f"the pin is behind {release['tag']}"]
+    if state == "diverged":
+        return [f"the pin is not on the history of {release['tag']}"]
+    return []
+
+
+def print_digests(result: dict) -> None:
+    emit(
+        "digests",
+        f"{len(result['ok'])} verified,"
+        f" {len(result['mismatched'])} mismatched,"
+        f" {len(result['unreadable'])} unreadable",
+    )
+    for name, expected, actual in result["mismatched"]:
+        detail(f"MISMATCH   {name}")
+        detail(f"{'':<11}manifest {expected}")
+        detail(f"{'':<11}upstream {actual}")
+    for name, why in result["unreadable"]:
+        detail(f"UNREADABLE {name}: {why}")
+
+
+def digest_problems(result: dict) -> list[str]:
+    problems: list[str] = []
+    if result["mismatched"]:
+        problems.append(f"{len(result['mismatched'])} manifest digest(s) do not match upstream")
+    if result["unreadable"]:
+        problems.append(f"{len(result['unreadable'])} catalogue(s) could not be read")
+    return problems
+
+
+def coverage_problems(repo: str, pinned: str, digests: dict[str, str], token: str | None) -> list[str]:
+    listed = upstream_files(repo, pinned, token)
+    missing = [name for name in listed if name not in digests]
+    extra = [name for name in digests if name not in listed]
+    emit("upstream files", f"{len(listed)} at the pinned commit, {len(missing)} absent from the manifest")
+    for name in missing:
+        detail(f"NOT SHIPPED {name} exists upstream but not in the manifest")
+    for name in extra:
+        detail(f"NOT UPSTREAM {name} is in the manifest but not upstream")
+    problems: list[str] = []
+    if missing:
+        problems.append(f"{len(missing)} upstream catalogue(s) the manifest does not list")
+    if extra:
+        problems.append(f"{len(extra)} manifest entr(ies) upstream does not have")
+    return problems
+
+
+def finish(args: argparse.Namespace, problems: list[str]) -> int:
+    if problems:
+        emit("verdict", "ACTION NEEDED")
+        for problem in problems:
+            detail(f"- {problem}")
+        return EXIT_PROBLEM
+    if args.skip_digests:
+        emit("verdict", "CURRENT: the pin is upstream's latest release (digests not checked)")
+    else:
+        emit("verdict", "CURRENT: the pin matches upstream's latest release and verifies")
+    return EXIT_OK
 
 
 def report(args: argparse.Namespace) -> int:
@@ -186,82 +291,24 @@ def report(args: argparse.Namespace) -> int:
     pinned = (args.commit or read_pinned_commit()).lower()
     digests, malformed = read_manifest()
 
-    print("Catalogue pin check")
-    print(f"  pinned commit   {pinned}  (from {DOCKERFILE.name})")
-    print(f"  manifest        {MANIFEST.name}: {len(digests)} file(s) listed")
+    print_pin_source(pinned, len(digests))
+    release, state = print_pin_state(args.repo, pinned, token)
 
-    release = latest_release(args.repo, token)
-    pinned_tag = tag_for_commit(args.repo, pinned, token)
-    state, sentence = pin_status(args.repo, pinned, release, token)
-
-    print(f"  pinned tag      {pinned_tag or 'no upstream tag points at this commit'}")
-    print(f"  upstream latest {release['tag']} released {release['published_at']}")
-    print(f"  pin status      {state.upper()}: {sentence}")
-
-    problems: list[str] = []
-    if malformed:
-        problems.append(f"{len(malformed)} manifest line(s) are not 'sha256  name'")
-        for line in malformed:
-            print(f"                  MALFORMED  {line}")
-    if state == "stale":
-        problems.append(f"the pin is behind {release['tag']}")
-    if state == "diverged":
-        problems.append(f"the pin is not on the history of {release['tag']}")
-    if state == "ahead":
-        print(
-            "                  note: the pin is not the commit of a published release,"
-            " so there is no release to be behind"
-        )
-
+    problems = manifest_problems(malformed) + state_problems(state, release)
+    entries = None
     if args.skip_digests:
-        print("  digests         skipped (--skip-digests)")
-        entries = None
+        emit("digests", "skipped (--skip-digests)")
     else:
         result = check_digests(args.repo, pinned, digests, token)
-        print(
-            f"  digests         {len(result['ok'])} verified,"
-            f" {len(result['mismatched'])} mismatched,"
-            f" {len(result['unreadable'])} unreadable"
-        )
-        for name, expected, actual in result["mismatched"]:
-            print(f"                  MISMATCH   {name}")
-            print(f"                             manifest {expected}")
-            print(f"                             upstream {actual}")
-        for name, why in result["unreadable"]:
-            print(f"                  UNREADABLE {name}: {why}")
-        if result["mismatched"]:
-            problems.append(f"{len(result['mismatched'])} manifest digest(s) do not match upstream")
-        if result["unreadable"]:
-            problems.append(f"{len(result['unreadable'])} catalogue(s) could not be read")
+        print_digests(result)
+        problems += digest_problems(result)
+        problems += coverage_problems(args.repo, pinned, digests, token)
         entries = result["entries"]
 
-        listed, _ = upstream_files(args.repo, pinned, token)
-        missing = [name for name in listed if name not in digests]
-        extra = [name for name in digests if name not in listed]
-        print(f"  upstream files  {len(listed)} at the pinned commit, {len(missing)} absent from the manifest")
-        for name in missing:
-            print(f"                  NOT SHIPPED {name} exists upstream but not in the manifest")
-        for name in extra:
-            print(f"                  NOT UPSTREAM {name} is in the manifest but not upstream")
-        if missing:
-            problems.append(f"{len(missing)} upstream catalogue(s) the manifest does not list")
-        if extra:
-            problems.append(f"{len(extra)} manifest entr(ies) upstream does not have")
-
     if entries is not None:
-        print(f"  entry count     {entries} entries across the listed catalogues")
+        emit("entry count", f"{entries} entries across the listed catalogues")
 
-    if problems:
-        print("  verdict         ACTION NEEDED")
-        for problem in problems:
-            print(f"                  - {problem}")
-        return EXIT_PROBLEM
-
-    if args.skip_digests:
-        print("  verdict         CURRENT: the pin is upstream's latest release (digests not checked)")
-    else:
-        print("  verdict         CURRENT: the pin matches upstream's latest release and verifies")
-    return EXIT_OK
+    return finish(args, problems)
 
 
 def main() -> int:
