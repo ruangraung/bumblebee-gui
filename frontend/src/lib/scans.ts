@@ -110,3 +110,11 @@ export function partialNote(scan: ScanRecord | null): string | null {
   if (scan?.summary?.timed_out !== true) return null
   return 'Results are partial. The scan did not finish walking the tree.'
 }
+
+// Why a scan failed, when the scanner recorded a reason. A scan that failed
+// before the scanner could speak has none, and the page then says only that
+// nothing was compared.
+export function failureReason(scan: ScanRecord | null): string | null {
+  const reason = scan?.error?.trim()
+  return reason ? reason : null
+}

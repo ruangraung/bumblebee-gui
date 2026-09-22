@@ -101,6 +101,34 @@ def test_scan_failure_marks_failed(client, monkeypatch):
     assert terminal is not None, "background scan never reached a terminal state"
     assert terminal["status"] == "failed"
     assert terminal["packages_found"] is None
+    assert terminal["error"] == "boom"
+
+
+def test_scan_failure_keeps_the_reason_and_drops_the_usage_dump(client, monkeypatch):
+    """A refused flag arrives with the scanner's whole usage block attached.
+
+    The complaint is the reason the scan failed; the usage block is thousands of
+    characters that belong in neither the record nor the interface.
+    """
+
+    async def failing_run_scan(request, ndjson_path, on_progress=None):
+        raise RuntimeError(
+            'invalid value "banana" for flag -max-duration: parse error\n'
+            "Usage of scan:\n"
+            "  -max-duration duration\n"
+            "\tmax wall-clock duration for the whole scan (0 = unbounded)"
+        )
+
+    monkeypatch.setattr("bumblebee_gui.main.run_scan", failing_run_scan)
+
+    response = client.post("/api/scans", json={"profile": "baseline"})
+    scan_id = response.json()["id"]
+
+    terminal = _wait_for_terminal(client, scan_id)
+    assert terminal is not None, "background scan never reached a terminal state"
+    assert terminal["status"] == "failed"
+    assert terminal["error"] == 'invalid value "banana" for flag -max-duration: parse error'
+    assert "Usage of" not in terminal["error"]
 
 
 def test_scan_endpoints_404_for_unknown_scan(client):
@@ -270,7 +298,7 @@ def test_delete_running_scan_cancels_task_and_cleans_up(client, monkeypatch, tmp
 
 
 def test_fail_stale_running_scans(monkeypatch, tmp_path):
-    """Startup recovery: rows stuck in 'running' are marked failed."""
+    """Startup recovery: rows stuck in 'running' are marked failed, with why."""
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "test.db")
     monkeypatch.setattr(database, "DB_DIR", tmp_path)
 
@@ -278,11 +306,12 @@ def test_fail_stale_running_scans(monkeypatch, tmp_path):
         await database.init_db()
         scan_id = await database.insert_scan(ScanProfile.baseline, ScanStatus.running)
         await database.fail_stale_running_scans()
-        record = await database.get_scan(scan_id)
-        assert record is not None
-        return record.status
+        return await database.get_scan(scan_id)
 
-    assert asyncio.run(scenario()) == ScanStatus.failed
+    recovered = asyncio.run(scenario())
+    assert recovered is not None
+    assert recovered.status == ScanStatus.failed
+    assert recovered.error == database.RESTART_REASON
 
 
 # ── Server-Sent Events ──────────────────────────────────────────────────────
@@ -502,3 +531,36 @@ def test_exposure_catalog_reports_an_image_without_catalogues(client, monkeypatc
 
     assert body["available"] is False
     assert body["versions"] == 0
+
+
+def test_create_scan_refuses_a_duration_the_scanner_cannot_parse(client):
+    """A value the scanner would abort on is refused before a scan is created.
+
+    The scanner exits before walking anything, so the alternative to this
+    refusal is a scan that fails and reports no packages.
+    """
+    response = client.post(
+        "/api/scans", json={"profile": "baseline", "max_duration": "banana"}
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "banana" in detail
+    assert "30s" in detail
+
+
+def test_create_scan_accepts_an_empty_duration(client):
+    """An empty value leaves the flag off the command line."""
+    response = client.post(
+        "/api/scans", json={"profile": "baseline", "max_duration": ""}
+    )
+
+    assert response.status_code == 202
+
+
+def test_create_scan_accepts_a_duration_the_scanner_can_parse(client):
+    response = client.post(
+        "/api/scans", json={"profile": "baseline", "max_duration": "1h30m"}
+    )
+
+    assert response.status_code == 202

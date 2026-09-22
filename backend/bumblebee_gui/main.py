@@ -22,8 +22,10 @@ from .database import (
     get_scans,
     init_db,
     insert_scan,
+    record_scan_failure,
     update_scan_status,
 )
+from .duration import problem_for_duration
 from .exporters import EXPORT_FORMATS, ExportPayload, build_export_response
 from .models import (
     CatalogueSummary,
@@ -42,6 +44,7 @@ from .scanner import (
     get_scan_packages,
     run_scan,
 )
+from .scanner_logic import cli_error_message
 
 logger = logging.getLogger("bumblebee_gui")
 
@@ -170,10 +173,12 @@ async def _run_scan_background(
         queue.put_nowait(
             {"type": "completed", "summary": summary.model_dump(mode="json")}
         )
-    except Exception:
-        logger.exception("Scan %s failed", scan_id)
-        await update_scan_status(scan_id=scan_id, status=ScanStatus.failed)
-        queue.put_nowait({"type": "failed"})
+    except Exception as exc:
+        # The scanner's own words, kept: a failed scan has to explain itself.
+        reason = cli_error_message(str(exc)) or type(exc).__name__
+        logger.exception("Scan %s failed: %s", scan_id, reason)
+        await record_scan_failure(scan_id, reason)
+        queue.put_nowait({"type": "failed", "error": reason})
 
 
 @app.post("/api/scans", response_model=ScanRecord, status_code=202)
@@ -185,6 +190,9 @@ async def create_scan(request: ScanRequest):
     directories it can read instead.
     """
     problems = root_problems(request.roots)
+    duration_problem = problem_for_duration(request.max_duration)
+    if duration_problem:
+        problems.append(duration_problem)
     if problems:
         raise HTTPException(status_code=422, detail="\n".join(problems))
 
@@ -234,6 +242,18 @@ def _sse_event(payload: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
 
 
+def _terminal_event(scan) -> dict:
+    """A finished scan's closing event, carrying the reason when it failed.
+
+    A subscriber that arrives after the scan is over reads the record and this
+    event together, so the reason has to travel with the event too.
+    """
+    event = {"type": scan.status.value}
+    if scan.error:
+        event["error"] = scan.error
+    return event
+
+
 @app.get("/api/scans/{scan_id}/events")
 async def scan_events(scan_id: int):
     """Stream scan progress as Server-Sent Events until a terminal state.
@@ -254,7 +274,7 @@ async def scan_events(scan_id: int):
         # Already finished: replay snapshot + terminal event and close.
         if scan.status in (ScanStatus.completed, ScanStatus.failed):
             yield _sse_event(snapshot)
-            yield _sse_event({"type": scan.status.value})
+            yield _sse_event(_terminal_event(scan))
             return
 
         yield _sse_event(snapshot)
@@ -275,7 +295,7 @@ async def scan_events(scan_id: int):
                     yield _sse_event({"type": "cancelled"})
                     return
                 if current.status in (ScanStatus.completed, ScanStatus.failed):
-                    yield _sse_event({"type": current.status.value})
+                    yield _sse_event(_terminal_event(current))
                     return
                 continue
             yield _sse_event(event)

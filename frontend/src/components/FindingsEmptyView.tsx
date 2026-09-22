@@ -4,7 +4,7 @@ import type { ScanRecord } from '@/lib/api'
 import ScanPicker from '@/components/ScanPicker'
 import { FindingsHeader } from '@/components/FindingsHeader'
 import { FINDINGS_EMPTY_MESSAGES, type FindingsEmptyKind } from '@/lib/findings'
-import { comparedLine } from '@/lib/scans'
+import { comparedLine, failureReason } from '@/lib/scans'
 import { cn } from '@/lib/utils'
 
 type ShownKind = Exclude<FindingsEmptyKind, 'none'>
@@ -56,6 +56,7 @@ export function FindingsEmptyView({ kind, scans, activeScan }: FindingsEmptyView
 
 function EmptyState({ kind, scan }: { kind: ShownKind; scan: ScanRecord | null }) {
   const { icon: Icon, tone } = CASES[kind]
+  const reason = failureReason(scan)
 
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-24 text-center">
@@ -65,6 +66,9 @@ function EmptyState({ kind, scan }: { kind: ShownKind; scan: ScanRecord | null }
       <p className="mt-3 text-sm text-muted-foreground">{FINDINGS_EMPTY_MESSAGES[kind]}</p>
       {(kind === 'no-findings' || kind === 'partial') && (
         <p className="mt-1 text-sm text-muted-foreground">{comparedLine(scan)}</p>
+      )}
+      {kind === 'failed' && reason && (
+        <p className="mt-1 max-w-xl font-mono text-xs text-muted-foreground">{reason}</p>
       )}
     </div>
   )

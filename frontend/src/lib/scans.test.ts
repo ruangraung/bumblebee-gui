@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FindingRecord, PackageRecord, ScanRecord } from "@/lib/api";
 import {
   comparedLine,
+  failureReason,
   findingsToFetch,
   isInProgress,
   noMatchMessage,
@@ -219,5 +220,30 @@ describe("partialNote", () => {
   it("says the results are partial for a scan that stopped at its time limit", () => {
     const stopped = scan({ summary: summary({ timed_out: true, duration_ms: 53, files_considered: 6455 }) });
     expect(partialNote(stopped)).toBe("Results are partial. The scan did not finish walking the tree.");
+  });
+});
+
+describe("failureReason", () => {
+  it("reads the scanner's own words", () => {
+    const failed = scan({
+      status: "failed",
+      error: 'invalid value "banana" for flag -max-duration: parse error',
+    });
+
+    expect(failureReason(failed)).toBe('invalid value "banana" for flag -max-duration: parse error');
+  });
+
+  it("trims a reason that arrived padded", () => {
+    expect(failureReason(scan({ status: "failed", error: "  boom  " }))).toBe("boom");
+  });
+
+  it("says nothing for a failed scan that recorded no reason", () => {
+    expect(failureReason(scan({ status: "failed" }))).toBeNull();
+    expect(failureReason(scan({ status: "failed", error: "" }))).toBeNull();
+    expect(failureReason(scan({ status: "failed", error: "   " }))).toBeNull();
+  });
+
+  it("says nothing without a scan", () => {
+    expect(failureReason(null)).toBeNull();
   });
 });
