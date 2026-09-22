@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useScanStore } from '@/stores/scanStore'
+import { readFormMemory, writeFormMemory } from '@/lib/formMemory'
 import {
   ALL_ECOSYSTEMS,
   DEFAULT_ECOSYSTEMS,
@@ -18,21 +19,28 @@ export type FormSection = 'ecosystems' | 'roots' | 'exposure'
 // The scan form: the values the user has entered, which sections are open, and
 // the three ways they change the form (a preset, a field, or the start button).
 // Submitting keeps the page's behaviour: the first problem found blocks the
-// scan and an API failure is left to the store to report.
+// scan and an API failure is left to the store to report. A form that started a
+// scan is remembered for the next visit.
 export function useScanForm() {
   const navigate = useNavigate()
   const { createScan, loading, error: storeError } = useScanStore()
 
-  const [profile, setProfile] = useState<Profile>('baseline')
-  const [ecosystems, setEcosystems] = useState<string[]>(DEFAULT_ECOSYSTEMS)
-  const [roots, setRoots] = useState<string[]>([])
+  // Read once per mount: the remembered form seeds every field below, so a
+  // second visit opens on what the last scan ran with.
+  const [remembered] = useState(readFormMemory)
+
+  const [profile, setProfile] = useState<Profile>(remembered?.form.profile ?? 'baseline')
+  const [ecosystems, setEcosystems] = useState<string[]>(
+    remembered?.form.ecosystems ?? DEFAULT_ECOSYSTEMS,
+  )
+  const [roots, setRoots] = useState<string[]>(remembered?.form.roots ?? [])
   const [newRoot, setNewRoot] = useState('')
-  const [exposureCatalog, setExposureCatalog] = useState('')
-  const [findingsOnly, setFindingsOnly] = useState(false)
-  const [maxDuration, setMaxDuration] = useState('')
+  const [exposureCatalog, setExposureCatalog] = useState(remembered?.form.exposureCatalog ?? '')
+  const [findingsOnly, setFindingsOnly] = useState(remembered?.form.findingsOnly ?? false)
+  const [maxDuration, setMaxDuration] = useState(remembered?.form.maxDuration ?? '')
 
   const [open, setOpen] = useState({ ecosystems: false, roots: false, exposure: false })
-  const [activePreset, setActivePreset] = useState<string | null>(null)
+  const [activePreset, setActivePreset] = useState<string | null>(remembered?.activePreset ?? null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const form: ScanFormState = {
@@ -102,7 +110,10 @@ export function useScanForm() {
   async function submitScan() {
     try {
       const scan = await createScan(buildScanRequest(form))
-      if (scan?.id) navigate(`/results/${scan.id}`)
+      if (scan?.id) {
+        writeFormMemory({ form, activePreset })
+        navigate(`/results/${scan.id}`)
+      }
     } catch {
       // Error is surfaced via the store
     }
