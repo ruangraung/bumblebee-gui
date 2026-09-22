@@ -57,6 +57,19 @@ class CatalogueSummary(BaseModel):
     available: bool
 
 
+class ScannerInfo(BaseModel):
+    """What the scanner binary reports about itself, for the About panel.
+
+    Version and commit are None when the binary is missing, silent, or printing
+    something unrecognised; ``error`` then says what happened, so the panel can
+    state the gap instead of showing a version that is not real.
+    """
+
+    version: Optional[str] = None
+    commit: Optional[str] = None
+    error: Optional[str] = None
+
+
 class ScanRecord(BaseModel):
     id: int
     timestamp: datetime

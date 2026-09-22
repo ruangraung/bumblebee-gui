@@ -44,6 +44,14 @@ export interface CatalogueSummary {
   available: boolean
 }
 
+export interface ScannerInfo {
+  /** The scanner's own version, null when it could not be read. */
+  version: string | null
+  commit: string | null
+  /** Why the version could not be read, when it could not be. */
+  error: string | null
+}
+
 export interface PackageRecord {
   package_name: string
   ecosystem: string
@@ -122,6 +130,10 @@ export const api = {
 
   async exposureCatalogue(): Promise<CatalogueSummary> {
     return request('/api/exposure-catalog')
+  },
+
+  async scanner(): Promise<ScannerInfo> {
+    return request('/api/scanner')
   },
 
   async getScan(id: number): Promise<ScanRecord> {

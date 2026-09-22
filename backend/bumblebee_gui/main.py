@@ -34,11 +34,13 @@ from .models import (
     PackageRecord,
     ScanRecord,
     ScanRequest,
+    ScannerInfo,
     ScanStatus,
 )
 from .roots import HOST_MOUNT, host_mount_report, inside_mount, root_problems
 from .scanner import (
     THREAT_INTEL_DIR,
+    cli_info,
     generate_ndjson_path,
     get_scan_findings,
     get_scan_packages,
@@ -148,6 +150,17 @@ async def exposure_catalogue() -> CatalogueSummary:
     were compared, and something else entirely when none were.
     """
     return CatalogueSummary(**catalogue_summary(THREAT_INTEL_DIR))
+
+
+@app.get("/api/scanner", response_model=ScannerInfo)
+async def scanner_info() -> ScannerInfo:
+    """What the scanner binary reports about itself, for the Settings page.
+
+    A version read from the binary cannot drift away from the image the way a
+    string written into the source can, which is why the page asks rather than
+    displaying a number nobody checks.
+    """
+    return await cli_info()
 
 
 async def _run_scan_background(

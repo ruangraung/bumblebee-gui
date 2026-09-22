@@ -7,6 +7,7 @@ from typing import Callable, List, Optional
 
 from .models import (
     ScanRequest,
+    ScannerInfo,
     ScanSummary,
     PackageRecord,
     FindingRecord,
@@ -22,6 +23,7 @@ from .scanner_logic import (
     decode_records,
     package_record,
     finding_record,
+    parse_cli_version,
     parse_ndjson_output,
     read_records,
     record_type,
@@ -208,3 +210,57 @@ async def get_scan_packages(scan_id: int, ndjson_path: str) -> List[PackageRecor
 async def get_scan_findings(scan_id: int, ndjson_path: str) -> List[FindingRecord]:
     """Load findings from a scan's NDJSON file."""
     return [finding_record(record) for record in read_records(Path(ndjson_path), FINDING)]
+
+
+# The CLI's self-report, read once per process: the binary cannot change while
+# this process runs, so later requests reuse the first answer.
+_cli_info: Optional[ScannerInfo] = None
+CLI_INFO_TIMEOUT_SECONDS = 5
+
+
+async def _cli_version_output() -> tuple[Optional[int], bytes, bytes]:
+    """Run the CLI's version subcommand and return its status and streams."""
+    process = await asyncio.create_subprocess_exec(
+        BINARY_PATH,
+        "version",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    if process.stdout is None or process.stderr is None:
+        # Cannot happen with PIPE above; guards the type checker only.
+        raise RuntimeError("Failed to capture subprocess output")
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), CLI_INFO_TIMEOUT_SECONDS
+        )
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.wait()
+        raise
+    return process.returncode, stdout, stderr
+
+
+async def cli_info() -> ScannerInfo:
+    """What the scanner binary reports about itself, for the About panel.
+
+    Every failure is returned as data rather than raised: a missing or silent
+    binary must not turn a read-only page into an error. Only a successful
+    reading is cached, so a binary installed later is picked up on the next
+    request instead of needing a restart.
+    """
+    global _cli_info
+    if _cli_info is not None:
+        return _cli_info
+    try:
+        returncode, stdout, stderr = await _cli_version_output()
+    except FileNotFoundError:
+        return ScannerInfo(error=f"No scanner binary at {BINARY_PATH}.")
+    except asyncio.TimeoutError:
+        return ScannerInfo(error="The scanner did not answer its version check in time.")
+    if returncode != 0:
+        reason = cli_error_message(stderr.decode())
+        return ScannerInfo(error=reason or f"The scanner exited with status {returncode}.")
+
+    version, commit = parse_cli_version(stdout.decode())
+    _cli_info = ScannerInfo(version=version, commit=commit)
+    return _cli_info
