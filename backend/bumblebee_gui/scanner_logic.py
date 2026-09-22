@@ -117,6 +117,26 @@ def calculate_summary(
     )
 
 
+# Long enough for the scanner's sentence, short enough to sit in a cell of the
+# interface and a column of the database.
+ERROR_LIMIT = 300
+
+
+def cli_error_message(text: str) -> str:
+    """The one line worth keeping from the scanner's error output.
+
+    A value the scanner refuses prints its complaint and then the whole usage
+    block, which runs to thousands of characters. The complaint is the reason a
+    scan failed; the usage block is noise everywhere the reason is read. An
+    empty result means the output carried no complaint, only usage text.
+    """
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("Usage of"):
+            return stripped[:ERROR_LIMIT]
+    return ""
+
+
 def package_record(record: dict) -> PackageRecord:
     """Map an NDJSON package record onto its API model."""
     return PackageRecord(

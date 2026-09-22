@@ -31,12 +31,18 @@ function withFindings(findingsCount: number): ScanRecord {
 
 describe("scanVerdict", () => {
   it("reads a finished scan with no matches as clean", () => {
-    expect(scanVerdict(scan())).toEqual({ matched: 0, clean: true, label: "No catalogue matches" });
+    expect(scanVerdict(scan())).toEqual({
+      matched: 0,
+      clean: true,
+      failed: false,
+      label: "No catalogue matches",
+    });
   });
 
   it("counts a single match in the singular", () => {
     const verdict = scanVerdict(withFindings(1));
     expect(verdict?.clean).toBe(false);
+    expect(verdict?.failed).toBe(false);
     expect(verdict?.label).toBe("1 catalogue match");
   });
 
@@ -48,16 +54,39 @@ describe("scanVerdict", () => {
     expect(scanVerdict(scan({ status: "running" }))).toBeNull();
   });
 
-  it("gives no verdict for a failed scan", () => {
-    expect(scanVerdict(scan({ status: "failed" }))).toBeNull();
-  });
-
   it("gives no verdict for a finished scan that recorded no summary", () => {
     expect(scanVerdict(scan({ summary: undefined }))).toBeNull();
   });
 
   it("gives no verdict without a scan", () => {
     expect(scanVerdict(null)).toBeNull();
+  });
+
+  // A failed scan produced no result, so it is never clean and never counted.
+  // The reason it carries is the scanner's own words, and it is the only thing
+  // the strip has to say.
+  it("reads a failed scan with the reason it carries", () => {
+    const failed = scan({
+      status: "failed",
+      summary: undefined,
+      error: 'invalid value "banana" for flag -max-duration: parse error',
+    });
+
+    expect(scanVerdict(failed)).toEqual({
+      matched: 0,
+      clean: false,
+      failed: true,
+      label: "Scan failed",
+      note: 'invalid value "banana" for flag -max-duration: parse error',
+    });
+  });
+
+  it("reads a failed scan that recorded no reason as failed without a note", () => {
+    const verdict = scanVerdict(scan({ status: "failed", summary: undefined }));
+
+    expect(verdict?.failed).toBe(true);
+    expect(verdict?.clean).toBe(false);
+    expect(verdict?.note).toBeUndefined();
   });
 
   // A scan that hit the time limit is not clean even with zero matches, and
@@ -83,6 +112,7 @@ describe("scanVerdict", () => {
       });
       const result = scanVerdict(summary);
       expect(result?.clean).toBe(c.clean);
+      expect(result?.failed).toBe(false);
       expect(result?.label).toBe(c.label);
       expect(result?.note).toBe(c.note);
     });

@@ -10,6 +10,10 @@ from .models import ScanRecord, ScanProfile, ScanStatus, ScanSummary
 DB_DIR = Path(os.environ.get("BUMBLEBEE_DATA_DIR", Path.home() / ".bumblebee-gui"))
 DB_PATH = DB_DIR / "bumblebee-gui.db"
 
+# Set on scans a backend restart orphaned: the reason is known, so it is recorded
+# rather than leaving a failed scan with nothing to say.
+RESTART_REASON = "The backend restarted while this scan was running."
+
 
 async def init_db():
     """Initialize the database with required tables."""
@@ -28,7 +32,8 @@ async def init_db():
                 ndjson_path TEXT,
                 timed_out INTEGER,
                 duration_ms INTEGER,
-                files_considered INTEGER
+                files_considered INTEGER,
+                error TEXT
             )
         """)
         await _add_missing_columns(db)
@@ -36,12 +41,17 @@ async def init_db():
 
 
 async def _add_missing_columns(db) -> None:
-    """Add coverage columns to a database created before they existed."""
+    """Add columns to a database created before they existed."""
     cursor = await db.execute("PRAGMA table_info(scans)")
     existing = {row[1] for row in await cursor.fetchall()}
-    for column in ("timed_out", "duration_ms", "files_considered"):
+    for column, kind in (
+        ("timed_out", "INTEGER"),
+        ("duration_ms", "INTEGER"),
+        ("files_considered", "INTEGER"),
+        ("error", "TEXT"),
+    ):
         if column not in existing:
-            await db.execute(f"ALTER TABLE scans ADD COLUMN {column} INTEGER")
+            await db.execute(f"ALTER TABLE scans ADD COLUMN {column} {kind}")
 
 
 def _summary_from_row(row) -> Optional[ScanSummary]:
@@ -56,6 +66,23 @@ def _summary_from_row(row) -> Optional[ScanSummary]:
         timed_out=bool(row["timed_out"]),
         duration_ms=row["duration_ms"],
         files_considered=row["files_considered"],
+    )
+
+
+def _record_from_row(row) -> ScanRecord:
+    """Map a scans row onto its API model.
+
+    One place to map a column, so a field added to the table cannot reach one
+    reader of a scan and miss another.
+    """
+    return ScanRecord(
+        id=row["id"],
+        timestamp=datetime.fromisoformat(row["timestamp"]),
+        profile=ScanProfile(row["profile"]),
+        status=ScanStatus(row["status"]),
+        summary=_summary_from_row(row),
+        ndjson_path=row["ndjson_path"],
+        error=row["error"],
     )
 
 
@@ -131,6 +158,16 @@ async def update_scan_status(
         await db.commit()
 
 
+async def record_scan_failure(scan_id: int, reason: str) -> None:
+    """Mark a scan failed and record why, so the record can explain itself."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE scans SET status = ?, error = ? WHERE id = ?",
+            (ScanStatus.failed.value, reason, scan_id),
+        )
+        await db.commit()
+
+
 async def get_scans(limit: int = 20) -> List[ScanRecord]:
     """Get recent scans."""
     async with aiosqlite.connect(DB_PATH) as db:
@@ -139,17 +176,7 @@ async def get_scans(limit: int = 20) -> List[ScanRecord]:
             "SELECT * FROM scans ORDER BY timestamp DESC, id DESC LIMIT ?", (limit,)
         )
         rows = await cursor.fetchall()
-        return [
-            ScanRecord(
-                id=row["id"],
-                timestamp=datetime.fromisoformat(row["timestamp"]),
-                profile=ScanProfile(row["profile"]),
-                status=ScanStatus(row["status"]),
-                summary=_summary_from_row(row),
-                ndjson_path=row["ndjson_path"],
-            )
-            for row in rows
-        ]
+        return [_record_from_row(row) for row in rows]
 
 
 async def get_scan(scan_id: int) -> Optional[ScanRecord]:
@@ -160,14 +187,7 @@ async def get_scan(scan_id: int) -> Optional[ScanRecord]:
         row = await cursor.fetchone()
         if not row:
             return None
-        return ScanRecord(
-            id=row["id"],
-            timestamp=datetime.fromisoformat(row["timestamp"]),
-            profile=ScanProfile(row["profile"]),
-            status=ScanStatus(row["status"]),
-            summary=_summary_from_row(row),
-            ndjson_path=row["ndjson_path"],
-        )
+        return _record_from_row(row)
 
 
 async def delete_scan(scan_id: int) -> bool:
@@ -179,7 +199,7 @@ async def delete_scan(scan_id: int) -> bool:
 
 
 async def fail_stale_running_scans():
-    """Mark scans stuck in 'running' as failed.
+    """Mark scans stuck in 'running' as failed, and say why.
 
     A backend restart mid-scan orphans the background task (the task registry
     lives in memory only), which would otherwise leave rows permanently
@@ -187,7 +207,7 @@ async def fail_stale_running_scans():
     """
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
-            "UPDATE scans SET status = ? WHERE status = ?",
-            (ScanStatus.failed.value, ScanStatus.running.value),
+            "UPDATE scans SET status = ?, error = COALESCE(error, ?) WHERE status = ?",
+            (ScanStatus.failed.value, RESTART_REASON, ScanStatus.running.value),
         )
         await db.commit()

@@ -64,6 +64,9 @@ class ScanRecord(BaseModel):
     status: ScanStatus
     summary: Optional[ScanSummary] = None
     ndjson_path: Optional[str] = None
+    # Why a failed scan failed, in the scanner's own words. Without it a failed
+    # scan and a scan that matched nothing look the same on screen.
+    error: Optional[str] = None
     # Live progress: packages discovered so far while running; final total when
     # completed. Computed on read — not stored in the database.
     packages_found: Optional[int] = None

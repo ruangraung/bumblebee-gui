@@ -24,6 +24,8 @@ export interface ScanRecord {
   status: 'pending' | 'running' | 'completed' | 'failed'
   summary?: ScanSummary
   ndjson_path?: string
+  /** Why a failed scan failed, in the scanner's own words. */
+  error?: string
   /** Live progress while running (packages discovered so far); final total when completed. */
   packages_found?: number
 }

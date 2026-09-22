@@ -17,6 +17,7 @@ from .scanner_logic import (
     PACKAGE,
     PackageProgress,
     calculate_summary,
+    cli_error_message,
     coverage_fields,
     decode_records,
     package_record,
@@ -173,8 +174,10 @@ async def run_scan(
     stderr = await _run_cli(cli, ndjson_path, on_progress)
 
     if cli.process.returncode != 0:
-        error_msg = stderr.decode().strip()
-        raise RuntimeError(f"Bumblebee scan failed: {error_msg}")
+        reason = cli_error_message(stderr.decode())
+        raise RuntimeError(
+            reason or f"The scanner exited with status {cli.process.returncode}."
+        )
 
     # Parse and summarize from the streamed file (the on-disk source of truth).
     # The CLI exits 0 even when it stopped at the time limit, so its own
