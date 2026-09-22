@@ -5,6 +5,7 @@ import Scan from "./pages/Scan";
 import Results from "./pages/Results";
 import Findings from "./pages/Findings";
 import Settings from "./pages/Settings";
+import NotFound from "./pages/NotFound";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/findings" element={<Findings />} />
         <Route path="/findings/:scanId" element={<Findings />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );
