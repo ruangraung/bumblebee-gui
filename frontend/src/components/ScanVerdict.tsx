@@ -41,6 +41,9 @@ export function ScanVerdict({ scan }: { scan: ScanRecord | null }) {
             )}
             <span className="text-muted-foreground"> · {comparedLine(scan)}</span>
           </p>
+          {verdict.note && (
+            <p className="text-sm text-amber-600 dark:text-amber-400">{verdict.note}</p>
+          )}
           <CatalogueLine />
         </div>
       </div>

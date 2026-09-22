@@ -59,4 +59,32 @@ describe("scanVerdict", () => {
   it("gives no verdict without a scan", () => {
     expect(scanVerdict(null)).toBeNull();
   });
+
+  // A scan that hit the time limit is not clean even with zero matches, and
+  // the verdict carries a partial-results note. A full scan reads clean.
+  const cases: { name: string; findings: number; timedOut: boolean; label: string; clean: boolean; note?: string }[] = [
+    { name: "truncated with no matches", findings: 0, timedOut: true, label: "Scan stopped at the time limit", clean: false, note: "Results are partial. The scan did not finish walking the tree." },
+    { name: "truncated with matches", findings: 2, timedOut: true, label: "2 catalogue matches", clean: false, note: "Results are partial. The scan did not finish walking the tree." },
+    { name: "full scan with no matches", findings: 0, timedOut: false, label: "No catalogue matches", clean: true },
+  ];
+
+  for (const c of cases) {
+    it(`reads ${c.name}`, () => {
+      const summary = scan({
+        summary: {
+          total_packages: 300,
+          ecosystems_found: 1,
+          findings_count: c.findings,
+          ecosystem_counts: { npm: 300 },
+          timed_out: c.timedOut,
+          duration_ms: c.timedOut ? 50 : 1,
+          files_considered: c.timedOut ? 6000 : 8000,
+        },
+      });
+      const result = scanVerdict(summary);
+      expect(result?.clean).toBe(c.clean);
+      expect(result?.label).toBe(c.label);
+      expect(result?.note).toBe(c.note);
+    });
+  }
 });

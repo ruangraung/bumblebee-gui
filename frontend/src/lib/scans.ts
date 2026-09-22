@@ -102,3 +102,11 @@ export function comparedLine(scan: ScanRecord | null): string {
   if (typeof total !== 'number') return 'This scan recorded no package count.'
   return `${total} ${total === 1 ? 'package' : 'packages'} examined.`
 }
+
+// A scan that hit its time limit covered part of the tree, so what it lists is
+// not a statement about the whole tree. Null for a scan that finished, and for
+// one that has no coverage recorded yet.
+export function partialNote(scan: ScanRecord | null): string | null {
+  if (scan?.summary?.timed_out !== true) return null
+  return 'Results are partial. The scan did not finish walking the tree.'
+}

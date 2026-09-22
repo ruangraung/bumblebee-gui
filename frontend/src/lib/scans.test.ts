@@ -5,6 +5,7 @@ import {
   findingsToFetch,
   isInProgress,
   noMatchMessage,
+  partialNote,
   packagesToFetch,
   resolveActiveScan,
   resolveFindingsScan,
@@ -205,5 +206,18 @@ describe("comparedLine", () => {
   it("says so when the scan recorded no count", () => {
     expect(comparedLine(scan())).toBe("This scan recorded no package count.");
     expect(comparedLine(null)).toBe("This scan recorded no package count.");
+  });
+});
+
+describe("partialNote", () => {
+  it("says nothing for a scan that finished", () => {
+    expect(partialNote(scan({ summary: summary() }))).toBeNull();
+    expect(partialNote(scan())).toBeNull();
+    expect(partialNote(null)).toBeNull();
+  });
+
+  it("says the results are partial for a scan that stopped at its time limit", () => {
+    const stopped = scan({ summary: summary({ timed_out: true, duration_ms: 53, files_considered: 6455 }) });
+    expect(partialNote(stopped)).toBe("Results are partial. The scan did not finish walking the tree.");
   });
 });

@@ -17,6 +17,7 @@ from .scanner_logic import (
     PACKAGE,
     PackageProgress,
     calculate_summary,
+    coverage_fields,
     decode_records,
     package_record,
     finding_record,
@@ -176,8 +177,11 @@ async def run_scan(
         raise RuntimeError(f"Bumblebee scan failed: {error_msg}")
 
     # Parse and summarize from the streamed file (the on-disk source of truth).
-    packages, findings = parse_ndjson_output(ndjson_path.read_text())
-    summary = calculate_summary(packages, findings)
+    # The CLI exits 0 even when it stopped at the time limit, so its own
+    # coverage record is read from the same text.
+    text = ndjson_path.read_text()
+    packages, findings = parse_ndjson_output(text)
+    summary = calculate_summary(packages, findings, coverage_fields(text))
 
     return summary, ndjson_path
 

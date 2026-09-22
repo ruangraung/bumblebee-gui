@@ -31,6 +31,12 @@ class ScanSummary(BaseModel):
     ecosystems_found: int
     findings_count: int
     ecosystem_counts: dict[str, int]
+    # Coverage of the walk itself, from the CLI's scan_summary record. A scan
+    # that hit its time limit reports fewer files than a full one, which is the
+    # only signal that the results are partial.
+    timed_out: bool = False
+    duration_ms: Optional[int] = None
+    files_considered: Optional[int] = None
 
 
 class HostMountReport(BaseModel):

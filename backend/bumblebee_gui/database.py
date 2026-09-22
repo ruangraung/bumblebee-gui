@@ -25,10 +25,38 @@ async def init_db():
                 ecosystems_found INTEGER,
                 findings_count INTEGER,
                 ecosystem_counts TEXT,
-                ndjson_path TEXT
+                ndjson_path TEXT,
+                timed_out INTEGER,
+                duration_ms INTEGER,
+                files_considered INTEGER
             )
         """)
+        await _add_missing_columns(db)
         await db.commit()
+
+
+async def _add_missing_columns(db) -> None:
+    """Add coverage columns to a database created before they existed."""
+    cursor = await db.execute("PRAGMA table_info(scans)")
+    existing = {row[1] for row in await cursor.fetchall()}
+    for column in ("timed_out", "duration_ms", "files_considered"):
+        if column not in existing:
+            await db.execute(f"ALTER TABLE scans ADD COLUMN {column} INTEGER")
+
+
+def _summary_from_row(row) -> Optional[ScanSummary]:
+    """Rebuild a scan's summary from its row, None while the scan is unfinished."""
+    if row["total_packages"] is None:
+        return None
+    return ScanSummary(
+        total_packages=row["total_packages"] or 0,
+        ecosystems_found=row["ecosystems_found"] or 0,
+        findings_count=row["findings_count"] or 0,
+        ecosystem_counts=json.loads(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
+        timed_out=bool(row["timed_out"]),
+        duration_ms=row["duration_ms"],
+        files_considered=row["files_considered"],
+    )
 
 
 async def insert_scan(
@@ -42,8 +70,9 @@ async def insert_scan(
         cursor = await db.execute(
             """
             INSERT INTO scans (timestamp, profile, status, total_packages, 
-                             ecosystems_found, findings_count, ecosystem_counts, ndjson_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                             ecosystems_found, findings_count, ecosystem_counts, ndjson_path,
+                             timed_out, duration_ms, files_considered)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 datetime.now(timezone.utc).isoformat(),
@@ -54,6 +83,9 @@ async def insert_scan(
                 summary.findings_count if summary else None,
                 json.dumps(summary.ecosystem_counts) if summary else None,
                 ndjson_path,
+                int(summary.timed_out) if summary else None,
+                summary.duration_ms if summary else None,
+                summary.files_considered if summary else None,
             ),
         )
         await db.commit()
@@ -74,6 +106,7 @@ async def update_scan_status(
                 UPDATE scans 
                 SET status = ?, total_packages = ?, ecosystems_found = ?,
                     findings_count = ?, ecosystem_counts = ?,
+                    timed_out = ?, duration_ms = ?, files_considered = ?,
                     ndjson_path = COALESCE(?, ndjson_path)
                 WHERE id = ?
                 """,
@@ -83,6 +116,9 @@ async def update_scan_status(
                     summary.ecosystems_found,
                     summary.findings_count,
                     json.dumps(summary.ecosystem_counts),
+                    int(summary.timed_out),
+                    summary.duration_ms,
+                    summary.files_considered,
                     ndjson_path,
                     scan_id,
                 ),
@@ -109,14 +145,7 @@ async def get_scans(limit: int = 20) -> List[ScanRecord]:
                 timestamp=datetime.fromisoformat(row["timestamp"]),
                 profile=ScanProfile(row["profile"]),
                 status=ScanStatus(row["status"]),
-                summary=ScanSummary(
-                    total_packages=row["total_packages"] or 0,
-                    ecosystems_found=row["ecosystems_found"] or 0,
-                    findings_count=row["findings_count"] or 0,
-                    ecosystem_counts=json.loads(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
-                )
-                if row["total_packages"] is not None
-                else None,
+                summary=_summary_from_row(row),
                 ndjson_path=row["ndjson_path"],
             )
             for row in rows
@@ -136,14 +165,7 @@ async def get_scan(scan_id: int) -> Optional[ScanRecord]:
             timestamp=datetime.fromisoformat(row["timestamp"]),
             profile=ScanProfile(row["profile"]),
             status=ScanStatus(row["status"]),
-            summary=ScanSummary(
-                total_packages=row["total_packages"] or 0,
-                ecosystems_found=row["ecosystems_found"] or 0,
-                findings_count=row["findings_count"] or 0,
-                ecosystem_counts=json.loads(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
-            )
-            if row["total_packages"] is not None
-            else None,
+            summary=_summary_from_row(row),
             ndjson_path=row["ndjson_path"],
         )
 
