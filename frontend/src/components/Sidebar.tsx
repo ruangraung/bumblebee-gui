@@ -8,33 +8,25 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ROUTES, type RouteEntry } from "@/lib/routes";
 
-const navItems: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/scan", label: "Scan", icon: Scan },
-  { to: "/results", label: "Results", icon: Table },
-  { to: "/findings", label: "Findings", icon: AlertTriangle },
-];
+const ICONS: Record<string, LucideIcon> = {
+  "/": LayoutDashboard,
+  "/scan": Scan,
+  "/results": Table,
+  "/findings": AlertTriangle,
+  "/settings": Settings,
+};
 
-const bottomItems: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/settings", label: "Settings", icon: Settings },
-];
+const navItems = ROUTES.filter((route) => route.path !== "/settings");
+const bottomItems = ROUTES.filter((route) => route.path === "/settings");
 
-function NavItem({
-  to,
-  label,
-  icon: Icon,
-  end,
-}: {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-  end?: boolean;
-}) {
+function NavItem({ route }: { route: RouteEntry }) {
+  const Icon = ICONS[route.path];
   return (
     <NavLink
-      to={to}
-      end={end}
+      to={route.path}
+      end={route.path === "/"}
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
@@ -45,7 +37,7 @@ function NavItem({
       }
     >
       <Icon className="h-[18px] w-[18px]" />
-      {label}
+      {route.label}
     </NavLink>
   );
 }
@@ -53,7 +45,6 @@ function NavItem({
 export default function Sidebar() {
   return (
     <aside className="flex h-screen w-60 flex-col border-r border-border bg-card">
-      {/* Brand */}
       <div className="flex items-center gap-2.5 border-b border-border px-4 py-4">
         {/* Empty alt on purpose: the brand name sits right beside it, so a label
             here would be announced twice. */}
@@ -66,19 +57,17 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Primary nav */}
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         <p className="overline mb-2 px-3">Workspace</p>
-        {navItems.map((item) => (
-          <NavItem key={item.to} {...item} />
+        {navItems.map((route) => (
+          <NavItem key={route.path} route={route} />
         ))}
       </nav>
 
-      {/* Bottom nav + version */}
       <div className="border-t border-border px-3 py-3">
         <p className="overline mb-2 px-3">System</p>
-        {bottomItems.map((item) => (
-          <NavItem key={item.to} {...item} />
+        {bottomItems.map((route) => (
+          <NavItem key={route.path} route={route} />
         ))}
         <p className="mt-4 px-3 font-mono text-[10px] leading-relaxed text-muted-foreground/70">
           gui v0.1.0 · cli v0.1.2
