@@ -21,11 +21,11 @@ BIN = "/usr/local/bin/bumblebee"
 # ── build_command ────────────────────────────────────────────────────────────
 
 
-def test_build_command_default(monkeypatch, tmp_path):
+def test_build_command_default_leaves_the_time_limit_to_the_scanner(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
     monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
     cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline))
-    assert cmd == [BIN, "scan", "--profile", "baseline", "--max-duration", "10m"]
+    assert cmd == [BIN, "scan", "--profile", "baseline"]
 
 
 def test_build_command_all_options(monkeypatch, tmp_path):
@@ -89,8 +89,6 @@ def test_build_command_multiple_roots(monkeypatch, tmp_path):
         "b",
         "--root",
         "c",
-        "--max-duration",
-        "10m",
     ]
 
 
@@ -449,7 +447,6 @@ def test_bundled_catalog_used_when_the_request_omits_one(monkeypatch, tmp_path):
     assert cmd == [
         BIN, "scan", "--profile", "baseline",
         "--exposure-catalog", str(tmp_path),
-        "--max-duration", "10m",
     ]
 
 
@@ -457,7 +454,7 @@ def test_no_catalog_flag_when_the_bundled_dir_is_absent(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
     monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
     cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline))
-    assert cmd == [BIN, "scan", "--profile", "baseline", "--max-duration", "10m"]
+    assert cmd == [BIN, "scan", "--profile", "baseline"]
 
 
 def test_explicit_catalog_wins_over_the_bundled_dir(monkeypatch, tmp_path):

@@ -36,7 +36,7 @@ export function ScanOptions({
           onChange={(e) => onMaxDurationChange(e.target.value)}
           className="h-9 w-20 rounded-md border border-input bg-background px-3 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         />
-        <span className="text-xs text-muted-foreground">30s, 10m or 2h; 0 for no limit</span>
+        <span className="text-xs text-muted-foreground">30s, 10m or 2h; empty or 0 for no limit</span>
       </div>
     </div>
   )
