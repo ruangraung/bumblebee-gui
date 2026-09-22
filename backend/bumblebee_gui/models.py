@@ -23,7 +23,7 @@ class ScanRequest(BaseModel):
     roots: Optional[List[str]] = None
     exposure_catalog: Optional[str] = None
     findings_only: bool = False
-    max_duration: Optional[str] = "10m"
+    max_duration: Optional[str] = ""
 
 
 class ScanSummary(BaseModel):

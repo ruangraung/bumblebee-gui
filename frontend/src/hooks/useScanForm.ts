@@ -29,7 +29,7 @@ export function useScanForm() {
   const [newRoot, setNewRoot] = useState('')
   const [exposureCatalog, setExposureCatalog] = useState('')
   const [findingsOnly, setFindingsOnly] = useState(false)
-  const [maxDuration, setMaxDuration] = useState('10m')
+  const [maxDuration, setMaxDuration] = useState('')
 
   const [open, setOpen] = useState({ ecosystems: false, roots: false, exposure: false })
   const [activePreset, setActivePreset] = useState<string | null>(null)
