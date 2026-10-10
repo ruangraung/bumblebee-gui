@@ -24,7 +24,8 @@ can filter, sort and export.
 
 ## Quick start
 
-You need Docker and Docker Compose.
+You need Docker and Docker Compose, plus Safari 16.4+, Chrome 111+, or Firefox 128+.
+The browser minimums come from [Tailwind CSS 4](https://tailwindcss.com/docs/compatibility).
 
 ```bash
 git clone https://github.com/ruangraung/bumblebee-gui.git
