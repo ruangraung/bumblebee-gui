@@ -153,6 +153,35 @@ def test_mount_report_names_the_parent_below_the_root(tmp_path):
     assert report["parent"] == str(inner.parent)
 
 
+def test_mount_report_keeps_a_file_only_directory_mounted(tmp_path):
+    mount = tmp_path / "host"
+    leaf = _project_like(mount / "api")
+
+    report = host_mount_report(str(leaf), host_mount=mount)
+
+    assert report == {
+        "mounted": True,
+        "path": str(leaf),
+        "parent": str(mount),
+        "directories": [],
+    }
+    assert problem_for_root(str(leaf), host_mount=mount) is None
+
+
+def test_mount_report_keeps_a_file_only_mount_root_mounted(tmp_path):
+    mount = _project_like(tmp_path / "host")
+
+    report = host_mount_report(host_mount=mount)
+
+    assert report == {
+        "mounted": True,
+        "path": str(mount),
+        "parent": None,
+        "directories": [],
+    }
+    assert problem_for_root(str(mount), host_mount=mount) is None
+
+
 def test_mount_report_says_so_when_nothing_is_mounted(tmp_path):
     report = host_mount_report(host_mount=tmp_path / "absent")
 
