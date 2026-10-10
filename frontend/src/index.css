@@ -1,6 +1,15 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+/* Keep existing utility names stable across the build-tool migration. */
+@utility break-words {
+  overflow-wrap: break-word;
+}
+
+@utility outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
 
 @layer base {
   :root {
@@ -61,6 +70,11 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv01", "ss03";
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
   }
 
   /* Subtle, dev-tool scrollbars */

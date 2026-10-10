@@ -20,13 +20,12 @@ export function HostRootPicker({ roots, onAddPath }: HostRootPickerProps) {
       </p>
     )
   }
-  // An empty mount is already explained by the mount notice above.
-  if (!report?.mounted || report.directories.length === 0) return null
+  if (!report?.mounted) return null
 
   return (
     <div className="mb-3 rounded-md border bg-muted/30 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-sm text-muted-foreground">
+        <span className="min-w-0 break-all text-sm text-muted-foreground">
           Browse <code className="font-mono">{report.path}</code>
         </span>
         {report.parent && (
@@ -40,6 +39,20 @@ export function HostRootPicker({ roots, onAddPath }: HostRootPickerProps) {
           </Button>
         )}
       </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="mb-2 min-h-11 whitespace-normal"
+        disabled={roots.includes(report.path)}
+        onClick={() => onAddPath(report.path)}
+      >
+        Use this directory as root
+      </Button>
+
+      {report.directories.length === 0 && (
+        <p className="text-sm text-muted-foreground">No subdirectories.</p>
+      )}
 
       <div className="space-y-1">
         {report.directories.map((directory) => {
