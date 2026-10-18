@@ -99,7 +99,7 @@ def test_generate_ndjson_path_pattern(monkeypatch, tmp_path):
     monkeypatch.setattr(scanner, "SCANS_DIR", tmp_path)
     path = scanner.generate_ndjson_path(ScanProfile.baseline)
     assert path.parent == tmp_path
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{6}_baseline\.ndjson", path.name)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{6}_[a-z0-9_]+_baseline\.ndjson", path.name)
 
 
 def test_generate_ndjson_path_includes_profile(monkeypatch, tmp_path):
