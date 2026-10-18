@@ -85,6 +85,13 @@ class ScanRecord(BaseModel):
     packages_found: Optional[int] = None
 
 
+class ScanHistoryPage(BaseModel):
+    scans: List[ScanRecord]
+    total: int
+    offset: int
+    limit: int
+
+
 class PackageRecord(BaseModel):
     package_name: str
     ecosystem: str
