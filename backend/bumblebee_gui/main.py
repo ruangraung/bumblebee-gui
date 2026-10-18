@@ -20,6 +20,7 @@ from .database import (
     fail_stale_running_scans,
     get_scan,
     get_scan_history,
+    get_scan_ids,
     get_scans,
     init_db,
     insert_scan,
@@ -35,6 +36,8 @@ from .models import (
     PackageRecord,
     ScanRecord,
     ScanHistoryPage,
+    ScanDeletionFailure,
+    HistoryDeletionResult,
     ScanRequest,
     ScannerInfo,
     ScanStatus,
@@ -379,6 +382,38 @@ async def delete_scan_record(scan_id: int):
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} not found")
     return {"detail": f"Scan {scan_id} deleted"}
+
+
+async def _delete_history_record(scan_id: int) -> ScanDeletionFailure | None:
+    try:
+        await delete_scan_record(scan_id)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            return ScanDeletionFailure(id=scan_id, detail="Could not delete this scan.")
+    except Exception:
+        logger.exception("History deletion failed for scan %s", scan_id)
+        return ScanDeletionFailure(id=scan_id, detail="Could not delete this scan data. Retry deletion.")
+    return None
+
+
+@app.delete("/api/scan-history", response_model=HistoryDeletionResult)
+async def delete_scan_history():
+    """Delete the ID snapshot captured at request start; retain later arrivals.
+
+    Failures retain their records for retry. Other snapshot records continue
+    independently. An already absent record counts as removed from the snapshot.
+    """
+    scan_ids = await get_scan_ids()
+    deleted_ids = []
+    failures = []
+    for scan_id in scan_ids:
+        failure = await _delete_history_record(scan_id)
+        if failure is None:
+            deleted_ids.append(scan_id)
+        else:
+            failures.append(failure)
+    _, remaining = await get_scan_history(limit=1)
+    return HistoryDeletionResult(deleted_ids=deleted_ids, failures=failures, remaining=remaining)
 
 
 @app.get("/api/scans/{scan_id}/packages", response_model=list[PackageRecord])

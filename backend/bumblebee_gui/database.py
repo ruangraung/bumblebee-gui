@@ -205,6 +205,13 @@ async def get_scan(scan_id: int) -> Optional[ScanRecord]:
         return _record_from_row(row)
 
 
+async def get_scan_ids() -> list[int]:
+    """Capture deletion scope without depending on a recent-list limit."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT id FROM scans ORDER BY id")
+        return [row[0] for row in await cursor.fetchall()]
+
+
 async def delete_scan(scan_id: int) -> bool:
     """Delete a scan record."""
     async with aiosqlite.connect(DB_PATH) as db:

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import {
   api,
   type ScanEvent,
+  type HistoryDeletionResult,
   type ScanRecord,
   type ScanRequest,
   type PackageRecord,
@@ -78,8 +79,25 @@ interface ScanState {
   fetchPackages: (id: number) => Promise<void>
   fetchFindings: (id: number) => Promise<void>
   createScan: (request: ScanRequest) => Promise<ScanRecord>
+  deleteHistory: () => Promise<HistoryDeletionResult>
   deleteScan: (id: number) => Promise<void>
   clearError: () => void
+}
+
+function deletedHistoryState(state: ScanState, ids: number[]): Partial<ScanState> {
+  const deleted = new Set(ids)
+  const packagesByScan = { ...state.packagesByScan }
+  const findingsByScan = { ...state.findingsByScan }
+  for (const id of ids) {
+    cacheDelete(packagesByScan, packagesOrder, id)
+    cacheDelete(findingsByScan, findingsOrder, id)
+  }
+  return {
+    scans: state.scans.filter((scan) => !deleted.has(scan.id)),
+    currentScan: state.currentScan && deleted.has(state.currentScan.id) ? null : state.currentScan,
+    cancelledScanIds: [...new Set([...state.cancelledScanIds, ...ids])],
+    packagesByScan, findingsByScan,
+  }
 }
 
 export const useScanStore = create<ScanState>((set, get) => ({
@@ -309,6 +327,12 @@ export const useScanStore = create<ScanState>((set, get) => ({
     } catch (err) {
       set({ error: (err as Error).message, loading: false })
     }
+  },
+
+  deleteHistory: async () => {
+    const result = await api.deleteHistory()
+    set((state) => deletedHistoryState(state, result.deleted_ids))
+    return result
   },
 
   clearError: () => set({ error: null }),

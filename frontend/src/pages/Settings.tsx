@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Monitor, Trash2 } from 'lucide-react'
+import { Sun, Moon, Monitor } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { AboutPanel } from '@/components/AboutPanel'
-import { Button } from '@/components/ui/button'
+import { ScanHistoryPanel } from '@/components/ScanHistoryPanel'
 import { PRESETS } from '@/lib/scanForm'
-import { useScanHistory } from '@/hooks/useScanHistory'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -45,9 +44,6 @@ export default function Settings() {
     mq.addEventListener('change', applyTheme)
     return () => mq.removeEventListener('change', applyTheme)
   }, [theme])
-
-  // ---- Scan history --------------------------------------------------------
-  const { count, clearing, clearAll } = useScanHistory()
 
   // ---- Render --------------------------------------------------------------
   return (
@@ -109,30 +105,7 @@ export default function Settings() {
 
       {/* Data Management */}
       <Section title="Data management">
-        <div className="space-y-4 rounded-lg border bg-card px-4 py-4">
-          <p className="text-sm">
-            Scan history: <span className="font-mono">{count}</span>{' '}
-            {count === 1 ? 'scan' : 'scans'}
-          </p>
-          <Button
-            variant="destructive"
-            size="sm"
-            disabled={clearing || count === 0}
-            onClick={clearAll}
-          >
-            {clearing ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                Clearing…
-              </span>
-            ) : (
-              <>
-                <Trash2 className="mr-1 h-4 w-4" />
-                Clear all scan data
-              </>
-            )}
-          </Button>
-        </div>
+        <ScanHistoryPanel />
       </Section>
 
       {/* About */}

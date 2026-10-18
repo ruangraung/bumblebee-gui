@@ -30,6 +30,19 @@ export interface ScanRecord {
   packages_found?: number
 }
 
+export interface ScanHistoryPage {
+  scans: ScanRecord[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export interface HistoryDeletionResult {
+  deleted_ids: number[]
+  failures: { id: number; detail: string }[]
+  remaining: number
+}
+
 export interface HostMountReport {
   mounted: boolean
   path: string
@@ -121,6 +134,14 @@ export const api = {
   async listScans(limit?: number): Promise<ScanRecord[]> {
     const params = limit ? `?limit=${limit}` : ''
     return request(`/api/scans${params}`)
+  },
+
+  async scanHistory(offset = 0): Promise<ScanHistoryPage> {
+    return request(`/api/scan-history?limit=20&offset=${offset}`)
+  },
+
+  async deleteHistory(): Promise<HistoryDeletionResult> {
+    return request('/api/scan-history', { method: 'DELETE' })
   },
 
   async hostDirectories(path?: string): Promise<HostMountReport> {
