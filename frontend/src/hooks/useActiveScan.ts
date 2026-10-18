@@ -1,9 +1,29 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useScanStore } from '@/stores/scanStore'
+import { useScanSelection } from '@/hooks/useScanSelection'
+import type { ScanRecord } from '@/lib/api'
 import { isInProgress, packagesToFetch, resolveActiveScan, scanPackages } from '@/lib/scans'
 
 // The scan a results view shows, its packages, and the lifecycle work that
 // keeps both fresh: load the list, fetch missing results, wait while running.
+function useResultCompletion(
+  scan: ScanRecord | null,
+  wait: (id: number) => Promise<ScanRecord | null>,
+  update: (scan: ScanRecord) => void,
+) {
+  useEffect(() => {
+    let active = true
+    if (scan && isInProgress(scan.status)) {
+      wait(scan.id).then((completed) => {
+        if (active && completed) update(completed)
+      }).catch(() => {
+        // Errors are surfaced through the store.
+      })
+    }
+    return () => { active = false }
+  }, [scan?.id, scan?.status, wait, update])
+}
+
 export function useActiveScan(scanId?: string) {
   const {
     scans,
@@ -17,7 +37,8 @@ export function useActiveScan(scanId?: string) {
     clearError,
   } = useScanStore()
 
-  const activeScan = useMemo(() => resolveActiveScan(scans, scanId), [scans, scanId])
+  const selection = useScanSelection(scans, scanId, resolveActiveScan, { loading, error })
+  const { activeScan } = selection
   const packages = scanPackages(packagesByScan, activeScan)
 
   useEffect(() => {
@@ -29,18 +50,11 @@ export function useActiveScan(scanId?: string) {
     if (missing !== null) fetchPackages(missing)
   }, [activeScan, packagesByScan, fetchPackages])
 
-  const scanStatus = activeScan?.status
-  useEffect(() => {
-    if (activeScan && isInProgress(scanStatus)) {
-      waitForScan(activeScan.id).catch(() => {
-        // Errors are surfaced through the store
-      })
-    }
-  }, [activeScan?.id, scanStatus, waitForScan])
+  useResultCompletion(activeScan, waitForScan, selection.updateRequested)
 
   const cancel = useCallback(async () => {
     if (activeScan) await deleteScan(activeScan.id)
   }, [activeScan, deleteScan])
 
-  return { scans, activeScan, packages, loading, error, clearError, cancel }
+  return { scans, activeScan, packages, loading: selection.loading, error: selection.error, clearError, cancel }
 }

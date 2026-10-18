@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 import { useScanStore } from '@/stores/scanStore'
+import { useScanSelection } from '@/hooks/useScanSelection'
 import { findingsToFetch, resolveFindingsScan } from '@/lib/scans'
 
 // The scan a findings view shows, its findings, and the lifecycle work that
@@ -16,7 +17,8 @@ export function useActiveFindings(scanId?: string) {
     clearError,
   } = useScanStore()
 
-  const activeScan = useMemo(() => resolveFindingsScan(scans, scanId), [scans, scanId])
+  const selection = useScanSelection(scans, scanId, resolveFindingsScan, { loading, error })
+  const { activeScan } = selection
 
   // Per-scan cache read: empty until that scan's findings have been fetched.
   const findings = findingsByScan[activeScan?.id ?? -1] ?? []
@@ -30,5 +32,5 @@ export function useActiveFindings(scanId?: string) {
     if (missing !== null) fetchFindings(missing)
   }, [activeScan, findingsByScan, fetchFindings])
 
-  return { scans, activeScan, findings, loading, error, clearError }
+  return { scans, activeScan, findings, loading: selection.loading, error: selection.error, clearError }
 }

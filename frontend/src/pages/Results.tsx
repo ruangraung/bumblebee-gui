@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import ScanPicker from '@/components/ScanPicker'
-import { Button } from '@/components/ui/button'
+import { ScanLoadError } from '@/components/ScanLoadError'
 import { PackageFilters } from '@/components/PackageFilters'
 import { ResultsHeader } from '@/components/ResultsHeader'
 import { ScanVerdict } from '@/components/ScanVerdict'
@@ -24,13 +24,7 @@ export default function Results() {
   }, [activeScan, cancel, navigate])
 
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="font-medium text-destructive">Failed to load results</p>
-        <p className="mb-4 text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" onClick={clearError}>Dismiss</Button>
-      </div>
-    )
+    return <ScanLoadError title="Failed to load results" error={error} scanId={scanId} recentPath="/results" clearError={clearError} />
   }
 
   return (
