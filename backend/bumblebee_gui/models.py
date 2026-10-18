@@ -92,6 +92,17 @@ class ScanHistoryPage(BaseModel):
     limit: int
 
 
+class ScanDeletionFailure(BaseModel):
+    id: int
+    detail: str
+
+
+class HistoryDeletionResult(BaseModel):
+    deleted_ids: List[int]
+    failures: List[ScanDeletionFailure]
+    remaining: int
+
+
 class PackageRecord(BaseModel):
     package_name: str
     ecosystem: str

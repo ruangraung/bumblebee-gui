@@ -1,41 +1,65 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { api, type ScanHistoryPage } from '@/lib/api'
 import { useScanStore } from '@/stores/scanStore'
 
-// The scan history shown on the Settings page: how many scans exist, and
-// deleting all of them. Both read the live store list, so the page cannot show
-// a count that is not real.
-export function useScanHistory() {
-  const scans = useScanStore((state) => state.scans)
-  const fetchScans = useScanStore((state) => state.fetchScans)
-  const deleteScan = useScanStore((state) => state.deleteScan)
-  const [clearing, setClearing] = useState(false)
+function useHistoryPage() {
+  const [page, setPage] = useState<ScanHistoryPage | null>(null)
+  const [offset, setOffset] = useState(0)
+  const [revision, setRevision] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchScans().catch(() => {
-      // The store surfaces the failure; the page only reports the count.
+    let active = true
+    setLoading(true)
+    setError(null)
+    api.scanHistory(offset).then((result) => {
+      if (!active) return
+      setPage(result)
+      setLoading(false)
+      if (offset > 0 && result.scans.length === 0) setOffset(0)
+    }).catch((err: Error) => {
+      if (!active) return
+      setPage(null)
+      setError(err.message)
+      setLoading(false)
     })
-  }, [fetchScans])
+    return () => { active = false }
+  }, [offset, revision])
 
-  const clearAll = useCallback(async () => {
-    if (scans.length === 0) return
+  function reload() {
+    setOffset(0)
+    setRevision((value) => value + 1)
+  }
+  return { page, loading, error, setOffset, reload }
+}
 
+export function useScanHistory() {
+  const history = useHistoryPage()
+  const deleteHistory = useScanStore((state) => state.deleteHistory)
+  const [clearing, setClearing] = useState(false)
+  const [deletionError, setDeletionError] = useState<string | null>(null)
+
+  async function clearAll() {
+    if (!history.page || history.loading || clearing) return
     const confirmed = window.confirm(
-      `Delete all ${scans.length} scans? Their records and result files are removed.`,
+      `Delete all scans present at the start of this operation (currently ${history.page.total} scans)? Their records and result files are removed, and running scans are cancelled. New scans are retained.`,
     )
     if (!confirmed) return
-
     setClearing(true)
+    setDeletionError(null)
     try {
-      // Sequential, because deleting a running scan cancels it server-side
-      // first. deleteScan reports its own failures through the store.
-      for (const scan of scans) {
-        await deleteScan(scan.id)
+      const result = await deleteHistory()
+      if (result.failures.length > 0) {
+        setDeletionError(result.failures.map(({ id, detail }) => `Scan ${id}: ${detail}`).join('\n'))
       }
+    } catch (err) {
+      setDeletionError((err as Error).message)
     } finally {
-      await fetchScans().catch(() => {})
+      history.reload()
       setClearing(false)
     }
-  }, [scans, deleteScan, fetchScans])
+  }
 
-  return { count: scans.length, clearing, clearAll }
+  return { ...history, clearing, clearAll, deletionError }
 }
