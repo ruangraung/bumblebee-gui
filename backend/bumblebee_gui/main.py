@@ -194,6 +194,42 @@ async def _run_scan_background(
         queue.put_nowait({"type": "failed", "error": reason})
 
 
+async def _insert_running_scan(request: ScanRequest, ndjson_path: Path) -> int:
+    """Recover the committed ID before rolling back a cancelled insertion."""
+    insertion = asyncio.create_task(
+        insert_scan(
+            profile=request.profile,
+            status=ScanStatus.running,
+            ndjson_path=str(ndjson_path),
+        )
+    )
+    try:
+        return await asyncio.shield(insertion)
+    except asyncio.CancelledError:
+        scan_id = await insertion
+        await delete_scan(scan_id)
+        raise
+
+
+async def _prepare_scan(request: ScanRequest) -> tuple[ScanRecord, Path]:
+    """Reserve output and its running record before starting any background work."""
+    ndjson_path = generate_ndjson_path(request.profile)
+    scan_id = None
+    try:
+        scan_id = await _insert_running_scan(request, ndjson_path)
+        scan = await get_scan(scan_id)
+        if not scan:
+            raise HTTPException(status_code=500, detail="Failed to create scan record")
+        return scan, ndjson_path
+    except BaseException:
+        try:
+            if scan_id is not None:
+                await delete_scan(scan_id)
+        finally:
+            remove_scan_file(str(ndjson_path))
+        raise
+
+
 @app.post("/api/scans", response_model=ScanRecord, status_code=202)
 async def create_scan(request: ScanRequest):
     """Submit a new scan. Runs in the background; poll
@@ -209,21 +245,9 @@ async def create_scan(request: ScanRequest):
     if problems:
         raise HTTPException(status_code=422, detail="\n".join(problems))
 
-    # The output path is decided up front so the record carries it from the
-    # start — a cancelled scan can then clean up its partial file.
-    ndjson_path = generate_ndjson_path(request.profile)
-    scan_id = await insert_scan(
-        profile=request.profile,
-        status=ScanStatus.running,
-        ndjson_path=str(ndjson_path),
-    )
-
-    # Read the record BEFORE spawning the background task so the 202 response
-    # deterministically reports "running" — otherwise a fast scan could flip
-    # to completed before the handler re-reads it (race in the contract).
-    scan = await get_scan(scan_id)
-    if not scan:
-        raise HTTPException(status_code=500, detail="Failed to create scan record")
+    # Snapshot "running" before a fast background scan can complete.
+    scan, ndjson_path = await _prepare_scan(request)
+    scan_id = scan.id
 
     queue: asyncio.Queue = asyncio.Queue()
     _scan_queues[scan_id] = queue

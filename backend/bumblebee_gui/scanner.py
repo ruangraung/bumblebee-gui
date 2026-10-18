@@ -1,5 +1,6 @@
 import asyncio
 import os
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -69,9 +70,14 @@ def build_command(request: ScanRequest) -> List[str]:
 
 
 def generate_ndjson_path(profile: ScanProfile) -> Path:
-    """Generate a unique NDJSON file path for a scan."""
+    """Reserve an empty output file without reusing another scan's path."""
+    ensure_dirs()
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H%M%S")
-    return SCANS_DIR / f"{timestamp}_{profile.value}.ndjson"
+    fd, name = tempfile.mkstemp(
+        prefix=f"{timestamp}_", suffix=f"_{profile.value}.ndjson", dir=SCANS_DIR
+    )
+    os.close(fd)
+    return Path(name)
 
 
 async def _iter_lines(stream):
