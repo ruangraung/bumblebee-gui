@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import ScanPicker from '@/components/ScanPicker'
-import { Button } from '@/components/ui/button'
+import { ScanLoadError } from '@/components/ScanLoadError'
 import { FindingsEmptyView } from '@/components/FindingsEmptyView'
 import { findingsEmptyKind } from '@/lib/findings'
 import { FindingsHeader } from '@/components/FindingsHeader'
@@ -19,13 +19,7 @@ export default function Findings() {
   const emptyKind = findingsEmptyKind({ loading, scans, activeScan, findingsCount: findings.length })
 
   if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-center">
-        <p className="mb-2 font-medium text-destructive">Failed to load findings</p>
-        <p className="mb-4 text-sm text-muted-foreground">{error}</p>
-        <Button variant="outline" onClick={clearError}>Dismiss</Button>
-      </div>
-    )
+    return <ScanLoadError title="Failed to load findings" error={error} scanId={scanId} recentPath="/findings" clearError={clearError} />
   }
 
   if (emptyKind !== 'none') {
