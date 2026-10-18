@@ -179,6 +179,21 @@ async def get_scans(limit: int = 20) -> List[ScanRecord]:
         return [_record_from_row(row) for row in rows]
 
 
+async def get_scan_history(limit: int = 20, offset: int = 0) -> tuple[List[ScanRecord], int]:
+    """Read a page and its total from the same database snapshot."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN")
+        cursor = await db.execute("SELECT COUNT(*) FROM scans")
+        total = (await cursor.fetchone())[0]
+        cursor = await db.execute(
+            "SELECT * FROM scans ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+        rows = await cursor.fetchall()
+        return [_record_from_row(row) for row in rows], total
+
+
 async def get_scan(scan_id: int) -> Optional[ScanRecord]:
     """Get a specific scan by ID."""
     async with aiosqlite.connect(DB_PATH) as db:

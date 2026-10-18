@@ -19,6 +19,7 @@ from .database import (
     delete_scan,
     fail_stale_running_scans,
     get_scan,
+    get_scan_history,
     get_scans,
     init_db,
     insert_scan,
@@ -33,6 +34,7 @@ from .models import (
     HostMountReport,
     PackageRecord,
     ScanRecord,
+    ScanHistoryPage,
     ScanRequest,
     ScannerInfo,
     ScanStatus,
@@ -265,6 +267,19 @@ async def list_scans(limit: int = Query(default=20, ge=1, le=100)):
     """List recent scans, with live progress for any that are running."""
     scans = await get_scans(limit=limit)
     return [attach_packages_found(scan) for scan in scans]
+
+
+@app.get("/api/scan-history", response_model=ScanHistoryPage)
+async def scan_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Page through history; each request reads the current history snapshot."""
+    scans, total = await get_scan_history(limit=limit, offset=offset)
+    return ScanHistoryPage(
+        scans=[attach_packages_found(scan) for scan in scans],
+        total=total, offset=offset, limit=limit,
+    )
 
 
 @app.get("/api/scans/{scan_id}", response_model=ScanRecord)
