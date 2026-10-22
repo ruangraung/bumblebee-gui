@@ -51,6 +51,12 @@ backend/bin/*.tar.gz
 .git-credentials
 .git-credentials.*
 
+# Private keys and certificate material (security)
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Docker volumes
 db-data/
 scan-data/
