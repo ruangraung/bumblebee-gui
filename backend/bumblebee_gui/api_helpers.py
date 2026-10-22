@@ -29,10 +29,18 @@ async def require_scan_data(scan_id: int) -> tuple[ScanRecord, str]:
 
     Returns the record together with its data path, so routes never have to
     handle a missing path themselves.
+
+    Two different absences are kept apart on purpose. A row with no path at all
+    is the pre-existing "no data file" contract. A row whose recorded path no
+    longer resolves is missing data: answering with an empty list would render
+    as "this scan found nothing" and hide that the output is gone. A running
+    scan is exempt because its file may not exist yet.
     """
     scan = await require_scan(scan_id)
     if not scan.ndjson_path:
         raise HTTPException(status_code=404, detail="No data file for this scan")
+    if scan.status != ScanStatus.running and not Path(scan.ndjson_path).exists():
+        raise HTTPException(status_code=404, detail="Scan data file is missing")
     return scan, scan.ndjson_path
 
 
