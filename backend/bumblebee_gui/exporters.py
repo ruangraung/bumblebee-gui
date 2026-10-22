@@ -8,12 +8,37 @@ layout live in exactly one place.
 import csv
 import io
 import json
+import re
 from dataclasses import dataclass
 from typing import Callable
 
 from fastapi.responses import StreamingResponse
 
 from .models import FindingRecord, PackageRecord, ScanRecord
+
+# A spreadsheet treats a cell starting with one of these as a formula or lets it
+# shift into the neighbouring cell. Package names and evidence text come from
+# scan input, so a scanned repository can choose them.
+_FORMULA_LEAD = ("=", "+", "-", "\t", "\r")
+
+# An npm scope is a name rather than a call, so `@types/node` stays readable
+# while `@SUM(1+1)` is neutralised. Mirrors the browser export's rule.
+_AT_SCOPE = re.compile(r"^@[\w.-]+/")
+
+
+def sanitize_cell(value):
+    """Neutralise a spreadsheet formula marker with the text apostrophe.
+
+    Same policy as the browser export, so the two paths cannot disagree about
+    what a hostile package name looks like once it is opened in Excel.
+    """
+    if not isinstance(value, str):
+        return value
+    if value.startswith("@"):
+        return value if _AT_SCOPE.match(value) else f"'{value}"
+    if value.startswith(_FORMULA_LEAD):
+        return f"'{value}"
+    return value
 
 
 @dataclass(frozen=True)
@@ -47,7 +72,7 @@ def write_csv_section(output: io.StringIO, heading: str, records: list) -> None:
     writer = csv.DictWriter(output, fieldnames=records[0].model_dump().keys())
     writer.writeheader()
     for record in records:
-        writer.writerow(record.model_dump())
+        writer.writerow({key: sanitize_cell(value) for key, value in record.model_dump().items()})
 
 
 def render_csv_export(payload: ExportPayload) -> str:
