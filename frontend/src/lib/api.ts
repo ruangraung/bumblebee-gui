@@ -48,6 +48,7 @@ export interface HostMountReport {
   path: string
   parent?: string
   directories: string[]
+  file_count?: number
 }
 
 export interface CatalogueSummary {

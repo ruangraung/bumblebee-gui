@@ -137,15 +137,24 @@ def host_mount_report(
     """
     target = Path(path) if path else host_mount
     if not host_mount.is_dir():
-        return {"mounted": False, "path": str(target), "parent": None, "directories": []}
+        return {
+            "mounted": False,
+            "path": str(target),
+            "parent": None,
+            "directories": [],
+            "file_count": 0,
+        }
 
-    directories = sorted(
-        str(entry) for entry in _entries(target) if entry.is_dir()
-    )[:limit]
+    entries = _entries(target)
+    directories = sorted(str(entry) for entry in entries if entry.is_dir())[:limit]
+    # A mount that holds only files still has content; counting those files lets
+    # the scan form say "holds files, no subdirectories" instead of "empty".
+    file_count = sum(1 for entry in entries if not entry.is_dir())
     at_root = target.resolve() == host_mount.resolve()
     return {
         "mounted": True,
         "path": str(target),
         "parent": None if at_root else str(target.parent),
         "directories": directories,
+        "file_count": file_count,
     }

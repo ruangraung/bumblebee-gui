@@ -34,6 +34,15 @@ export function mountNotice(report: HostMountReport | null): MountNotice {
   }
 
   if (report.directories.length === 0) {
+    // A mount holding only files is not empty. Saying "empty" sends the reader
+    // looking for a BUMBLEBEE_HOST_DIR typo when the path is actually correct.
+    if (report.file_count) {
+      const files = report.file_count === 1 ? '1 file' : `${report.file_count} files`
+      return {
+        tone: 'info',
+        text: `${report.path} is mounted read-only and holds ${files} but no subdirectories. Scan the mount itself, or point BUMBLEBEE_HOST_DIR at a directory that contains projects.`,
+      }
+    }
     return {
       tone: 'warning',
       text: `${report.path} is mounted but empty, so a scan of it reports no packages. BUMBLEBEE_HOST_DIR usually named a directory that does not exist on the host: Docker creates it and mounts it empty.`,
