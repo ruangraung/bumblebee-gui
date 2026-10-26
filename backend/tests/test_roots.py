@@ -164,6 +164,7 @@ def test_mount_report_keeps_a_file_only_directory_mounted(tmp_path):
         "path": str(leaf),
         "parent": str(mount),
         "directories": [],
+        "file_count": 1,
     }
     assert problem_for_root(str(leaf), host_mount=mount) is None
 
@@ -178,6 +179,7 @@ def test_mount_report_keeps_a_file_only_mount_root_mounted(tmp_path):
         "path": str(mount),
         "parent": None,
         "directories": [],
+        "file_count": 1,
     }
     assert problem_for_root(str(mount), host_mount=mount) is None
 

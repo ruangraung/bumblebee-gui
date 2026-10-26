@@ -46,6 +46,7 @@ class HostMountReport(BaseModel):
     path: str
     parent: Optional[str] = None
     directories: List[str] = []
+    file_count: int = 0
 
 
 class CatalogueSummary(BaseModel):

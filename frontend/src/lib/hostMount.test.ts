@@ -44,6 +44,20 @@ describe('mountNotice', () => {
     expect(notice.tone).toBe('warning')
     expect(notice.text).toContain('BUMBLEBEE_HOST_DIR')
   })
+
+  it('describes a mount that holds only files without calling it empty', () => {
+    const notice = mountNotice(report({ file_count: 3 }))
+
+    expect(notice.tone).toBe('info')
+    expect(notice.text).toContain('holds 3 files but no subdirectories')
+    expect(notice.text).not.toContain('mounted but empty')
+  })
+
+  it('uses the singular for a single file', () => {
+    const notice = mountNotice(report({ file_count: 1 }))
+
+    expect(notice.text).toContain('holds 1 file but no subdirectories')
+  })
 })
 
 describe('directoryName', () => {
