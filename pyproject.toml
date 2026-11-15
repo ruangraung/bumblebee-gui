@@ -32,7 +32,10 @@ dependencies = [
 ]
 
 [project.scripts]
-bumblebee-gui = "bumblebee_gui.cli:main"
+# No console script yet: the application runs as a service
+# (uvicorn bumblebee_gui.main:app) inside the container, and a script entry
+# pointing at a module that does not exist ships a broken command to anyone who
+# installs the package. Add one when there is a real launcher to call.
 
 [project.urls]
 Homepage = "https://github.com/ruangraung/bumblebee-gui"

@@ -205,7 +205,7 @@ Honest table, because a README that claims more than it has run is worse than a 
 | Linux with Docker Compose | **Verified.** Scans of a 780 package tree, catalogue matching against a compromised fixture, the full test suite and all five CI gates |
 | macOS with Docker Compose | **Verified.** A fresh clone on macOS under OrbStack, mounting a home directory and scanning it. OrbStack has to be granted access to the mounted directory, or the mount reads as empty inside the container |
 | Windows | **No native path.** Upstream publishes no Windows build of the scanner. Docker Desktop runs the Linux container, so it may well work, but nothing has been checked there |
-| Native install without Docker | A development path only. Nothing has been verified and `install.sh` does not produce a working setup yet |
+| Native install without Docker | **Refused.** `install.sh` stops with a message and a non-zero exit. Native packaging, meaning a Python environment, the Node build, the scanner binary and the catalogue set, does not exist yet |
 
 If you try a path that is not verified, an issue describing what happened is genuinely useful.
 
