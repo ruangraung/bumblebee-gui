@@ -76,8 +76,21 @@ export function findingsToCSV(findings: FindingRecord[]): string {
 }
 
 // Before a scan is selected there is no id, so an export is named "latest".
-export function findingsFilename(scanId: number | undefined, extension: 'json' | 'csv'): string {
-  return `findings-${scanId ?? 'latest'}.${extension}`
+// A filtered subset is named as one: the same file name for a full scan and
+// for three of its rows is how a full export gets overwritten by a slice.
+export function findingsFilename(
+  scanId: number | undefined,
+  extension: 'json' | 'csv',
+  options: { filtered?: boolean } = {},
+): string {
+  const filterSuffix = options.filtered ? '-filtered' : ''
+  return `findings-${scanId ?? 'latest'}${filterSuffix}.${extension}`
+}
+
+// Whether the findings filters narrow the rows at all: any search text, or any
+// dropdown off "all".
+export function filtersActive(filters: { search: string; severity: string; ecosystem: string }): boolean {
+  return filters.search !== '' || filters.severity !== 'all' || filters.ecosystem !== 'all'
 }
 
 // Which empty layout the findings page shows, if any. The cases stay apart
