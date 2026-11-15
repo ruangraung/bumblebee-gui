@@ -161,12 +161,13 @@ class TokenMiddleware:
         self.app = app
         self.header = header
 
+    def _token_required(self, scope) -> bool:
+        if scope["type"] != "http" or scope["method"] == "OPTIONS":
+            return False
+        return scope["path"].startswith("/api/")
+
     async def __call__(self, scope, receive, send):
-        if (
-            scope["type"] == "http"
-            and scope["method"] != "OPTIONS"
-            and scope["path"].startswith("/api/")
-        ):
+        if self._token_required(scope):
             token = os.environ.get("BUMBLEBEE_API_TOKEN")
             if token:
                 headers = {name: value for name, value in scope["headers"]}
