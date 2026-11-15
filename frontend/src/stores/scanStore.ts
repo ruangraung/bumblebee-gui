@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 import {
   api,
-  type ScanEvent,
   type HistoryDeletionResult,
   type ScanRecord,
   type ScanRequest,
   type PackageRecord,
   type FindingRecord,
 } from '@/lib/api'
+import { parseScanEvent } from '@/lib/scanEvents'
 
 // Per-scan result caches are bounded so a long-lived session cannot grow
 // without limit. Oldest entries are evicted first; pages lazily refetch a
@@ -212,8 +212,9 @@ export const useScanStore = create<ScanState>((set, get) => ({
       }
 
       es.addEventListener('snapshot', (e) => {
+        const data = parseScanEvent((e as MessageEvent).data as string)
+        if (data === null) return
         gotMessage = true
-        const data = JSON.parse((e as MessageEvent).data) as ScanEvent
         if (data.status === 'completed' || data.status === 'failed') {
           // Already terminal on connect — grab the final record.
           finishWithFetch()
@@ -223,8 +224,9 @@ export const useScanStore = create<ScanState>((set, get) => ({
       })
 
       es.addEventListener('progress', (e) => {
+        const data = parseScanEvent((e as MessageEvent).data as string)
+        if (data === null) return
         gotMessage = true
-        const data = JSON.parse((e as MessageEvent).data) as ScanEvent
         applyProgress(data.packages_found)
       })
 
