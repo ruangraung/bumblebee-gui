@@ -572,3 +572,39 @@ def test_create_scan_accepts_a_duration_the_scanner_can_parse(client):
     )
 
     assert response.status_code == 202
+
+
+def test_shutdown_cancels_scans_that_are_still_running():
+    """Stopping the backend must stop its scans.
+
+    Without a drain after the lifespan `yield`, uvicorn stops the parent process
+    while a scan keeps writing, and its row stays `running` until the next
+    startup marks it stale. The drain cancels each tracked task and waits for it,
+    which also lets `run_scan` kill and reap the CLI child.
+    """
+    from bumblebee_gui import main as gui_main
+
+    async def scenario():
+        started = asyncio.Event()
+        cleaned_up = asyncio.Event()
+
+        async def slow_scan():
+            started.set()
+            try:
+                await asyncio.sleep(60)
+            finally:
+                cleaned_up.set()
+
+        task = asyncio.create_task(slow_scan())
+        gui_main._background_tasks[424242] = task
+        await started.wait()
+        await gui_main._drain_background_tasks()
+        return task, cleaned_up.is_set()
+
+    task, cleaned_up = asyncio.run(scenario())
+
+    try:
+        assert task.cancelled(), "the scan task was not cancelled on shutdown"
+        assert cleaned_up, "the scan was not given the chance to clean up"
+    finally:
+        gui_main._background_tasks.clear()

@@ -94,12 +94,31 @@ async def _cancel_running_scan(scan_id: int) -> None:
         queue.put_nowait({"type": "cancelled"})
 
 
+async def _drain_background_tasks(timeout: float = 5.0) -> None:
+    """Cancel scans that are still running and wait for them to unwind.
+
+    Shutdown used to leave them going: uvicorn stops the process while a scan
+    keeps writing, and its row stays `running` until the next startup marks it
+    stale. Cancelling here also lets `run_scan` kill and reap the CLI child,
+    because the cancellation path unwinds through `_run_cli`.
+    """
+    tasks = [task for task in _background_tasks.values() if not task.done()]
+    if not tasks:
+        return
+    for task in tasks:
+        task.cancel()
+    await asyncio.wait(tasks, timeout=timeout)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: initialize DB on startup and recover stale rows."""
+    """Application lifespan: initialize the DB, then own the scans it started."""
     await init_db()
     await fail_stale_running_scans()
-    yield
+    try:
+        yield
+    finally:
+        await _drain_background_tasks()
 
 
 app = FastAPI(
