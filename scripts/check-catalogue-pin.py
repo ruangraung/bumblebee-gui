@@ -62,7 +62,9 @@ class Unreachable(Exception):
 def get(url: str, token: str | None) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "bumblebee-gui-catalogue-pin-check"})
     request.add_header("Accept", "application/vnd.github+json")
-    if token:
+    # The token is for the API's rate limit. Sending it to any other host hands
+    # a GitHub credential to whatever serves the URL, redirects included.
+    if token and url.startswith("https://api.github.com/"):
         request.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -146,7 +148,9 @@ def pin_status(repo: str, pinned: str, release: dict, token: str | None) -> tupl
         )
     if state == "diverged":
         return "diverged", f"the pin is not on the history of {release['tag']}"
-    return "current", f"upstream reports no difference from {release['tag']}"
+    raise Unreachable(
+        f"GitHub reported comparison status {state!r} for the pin against {release['tag']}"
+    )
 
 
 def check_digests(repo: str, pinned: str, digests: dict[str, str], token: str | None) -> dict:
