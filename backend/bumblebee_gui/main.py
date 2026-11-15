@@ -62,6 +62,10 @@ logger = logging.getLogger("bumblebee_gui")
 # be cancelled by id when a running scan is deleted.
 _background_tasks: dict[int, asyncio.Task] = {}
 
+# Set while the backend is stopping, so a cancelled scan can record why it stopped
+# instead of leaving its row running until the next startup repairs it.
+_shutting_down = False
+
 # Open Server-Sent Event streams per scan. Every stream gets its own bounded
 # queue: one queue drained by every subscriber distributed each event to exactly
 # one of them, which left a second tab waiting for the fifteen second database
@@ -107,6 +111,8 @@ async def _drain_background_tasks(timeout: float = 5.0) -> None:
     tasks = [task for task in _background_tasks.values() if not task.done()]
     if not tasks:
         return
+    global _shutting_down
+    _shutting_down = True
     for task in tasks:
         task.cancel()
     await asyncio.wait(tasks, timeout=timeout)
@@ -213,6 +219,20 @@ async def _run_scan_background(
         _subscribers.publish(
             scan_id, {"type": "completed", "summary": summary.model_dump(mode="json")}
         )
+    except asyncio.CancelledError:
+        # Shutdown cancels tracked scans. Without this the row keeps its running
+        # status until the next startup marks stale rows failed, so the scan looks
+        # like it was still going when the process died. The delete path cancels
+        # the task too, but that row is removed afterwards, so only a shutdown is
+        # recorded here.
+        if _shutting_down:
+            reason = "The backend stopped while this scan was running."
+            try:
+                await asyncio.shield(record_scan_failure(scan_id, reason))
+            except asyncio.CancelledError:
+                pass
+            _subscribers.publish(scan_id, {"type": "failed", "error": reason})
+        raise
     except Exception as exc:
         # The scanner's own words, kept: a failed scan has to explain itself.
         reason = cli_error_message(str(exc)) or type(exc).__name__
