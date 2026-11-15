@@ -89,11 +89,16 @@ directory that answers your question.
 A scanner can only report what it has something to compare against. Bumblebee GUI ships the catalogues and
 points the scanner at them, so a scan reports real matches without any setup.
 
-The catalogues come from upstream's `threat_intel` set, pinned at tag `v0.1.2`: **eleven catalogues, 1,072
-entries**, covering npm, pypi, rubygems, go, packagist and editor-extension. Each one describes a real
+The catalogues come from upstream's `threat_intel` set, pinned at commit `c1e83c0`: **fifteen catalogues,
+1,103 entries**, covering npm, pypi, rubygems, go, packagist and editor-extension. Each one describes a real
 published campaign, with its source report attached.
 
-Matching is exact: a package is reported when its ecosystem, name and version are all one of those 1,072
+The scanner is built from a pinned commit for the same reason. Upstream has published no release since
+`v0.1.2`, while the catalogues it maintains moved to schema `0.2.0`, which `v0.1.2` refuses to load. A released
+binary therefore cannot read today's data. The image clones commit `c1e83c0`, asserts that commit after
+checkout, compiles the CLI with the Go toolchain, and fails the build if the binary does not start.
+
+Matching is exact: a package is reported when its ecosystem, name and version are all one of those 1,103
 entries. A scan that reports no matches has found that none of the packages it saw is on the list, which is a
 narrow result worth reading carefully. The catalogues record specific compromised releases rather than a
 general vulnerability database, so a package the list does not mention is not covered by it, and a clean scan
@@ -290,9 +295,9 @@ merge. Saying so seems better than leaving a reader to guess.
 
 Apache-2.0. See [LICENSE](LICENSE).
 
-The Docker image redistributes Perplexity's compiled Bumblebee CLI, which is also Apache-2.0, and the exposure
-catalogues are fetched from the same project at build time. Attribution and the exact versions are recorded in
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The Docker image builds Perplexity's Bumblebee CLI from upstream source at a pinned commit; the CLI is also
+Apache-2.0, and the exposure catalogues are fetched from the same project at build time. Attribution and the
+exact commits are recorded in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Acknowledgments
 

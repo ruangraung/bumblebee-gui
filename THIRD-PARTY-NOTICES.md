@@ -8,16 +8,17 @@ others, recorded here.
 - Project: <https://github.com/perplexityai/bumblebee>
 - Copyright: Perplexity AI and contributors
 - License: Apache-2.0
-- What we ship: the compiled `linux_amd64` binary, version **0.1.2**, tag `v0.1.2`, commit
-  `cc57710eeaf685e7b89924a36c8583cad0a378fe`
-- Modifications: none. The binary is downloaded, its sha256 is verified against the published digest, and it is
-  installed unmodified into the image. No source changes were made to it.
+- What we ship: the `linux_amd64` binary, compiled during the image build from commit
+  `c1e83c0adb53a7f527b40a7181a690ad99a0a6e0`. Upstream has published no release since `v0.1.2`, so the build
+  resolves the commit directly instead of a release asset.
+- Modifications: none to the source. The commit is cloned, the checkout is asserted to be that commit, and the
+  unmodified source is compiled into the binary installed in the image.
 
 ## Exposure catalogues
 
 - Project: <https://github.com/perplexityai/bumblebee>, directory `threat_intel`
 - License: Apache-2.0
-- What we ship: eleven JSON catalogues, fetched at build time from the same pinned commit, verified per file by
+- What we ship: fifteen JSON catalogues, fetched at build time from the same pinned commit, verified per file by
   the sha256 digests in [`threat-intel.manifest`](threat-intel.manifest), and installed into the image at
   `/opt/bumblebee/threat-intel`
 - Modifications: none
