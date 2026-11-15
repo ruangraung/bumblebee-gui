@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 
 from bumblebee_gui import database
 from bumblebee_gui.models import ScanProfile, ScanStatus
+from bumblebee_gui.scanner_logic import calculate_summary
 
 app = importlib.import_module("bumblebee_gui.main").app
 
@@ -86,3 +87,17 @@ def test_scan_with_no_recorded_path_still_reports_its_own_error(monkeypatch, tmp
 
     assert response.status_code == 404
     assert response.json()["detail"] == "No data file for this scan"
+
+
+def test_a_summary_record_that_never_arrives_means_unknown_coverage():
+    summary = calculate_summary([{"ecosystem": "pypi"}], [])
+
+    assert summary.timed_out is None
+
+
+def test_an_explicit_false_summary_stays_false():
+    summary = calculate_summary(
+        [{"ecosystem": "pypi"}], [], coverage={"timed_out": False}
+    )
+
+    assert summary.timed_out is False

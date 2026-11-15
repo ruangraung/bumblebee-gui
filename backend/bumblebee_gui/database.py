@@ -64,7 +64,7 @@ def _summary_from_row(row) -> Optional[ScanSummary]:
         ecosystems_found=row["ecosystems_found"] or 0,
         findings_count=row["findings_count"] or 0,
         ecosystem_counts=json.loads(row["ecosystem_counts"]) if row["ecosystem_counts"] else {},
-        timed_out=bool(row["timed_out"]),
+        timed_out=None if row["timed_out"] is None else bool(row["timed_out"]),
         duration_ms=row["duration_ms"],
         files_considered=row["files_considered"],
     )
@@ -159,7 +159,9 @@ async def update_scan_status(
                     summary.ecosystems_found,
                     summary.findings_count,
                     json.dumps(summary.ecosystem_counts),
-                    int(summary.timed_out),
+                    # None means the scan_summary record never arrived; the
+                    # column stores it as NULL, not as a claim of full coverage.
+                    None if summary.timed_out is None else int(summary.timed_out),
                     summary.duration_ms,
                     summary.files_considered,
                     ndjson_path,
