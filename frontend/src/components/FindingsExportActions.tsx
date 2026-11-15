@@ -6,10 +6,11 @@ import { useFindingsExport } from '@/hooks/useFindingsExport'
 interface FindingsExportActionsProps {
   findings: FindingRecord[]
   scanId?: number
+  filtered?: boolean
 }
 
-export function FindingsExportActions({ findings, scanId }: FindingsExportActionsProps) {
-  const { exportJSON, exportCSV } = useFindingsExport(findings, scanId)
+export function FindingsExportActions({ findings, scanId, filtered }: FindingsExportActionsProps) {
+  const { exportJSON, exportCSV } = useFindingsExport(findings, scanId, filtered)
 
   if (findings.length === 0) return null
 

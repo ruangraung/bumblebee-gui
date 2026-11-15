@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom'
 import ScanPicker from '@/components/ScanPicker'
 import { ScanLoadError } from '@/components/ScanLoadError'
 import { FindingsEmptyView } from '@/components/FindingsEmptyView'
-import { findingsEmptyKind } from '@/lib/findings'
+import { findingsEmptyKind, filtersActive } from '@/lib/findings'
 import { FindingsHeader } from '@/components/FindingsHeader'
 import { FindingsFilters } from '@/components/FindingsFilters'
 import { FindingsSummary } from '@/components/FindingsSummary'
@@ -52,7 +52,15 @@ export default function Findings() {
 
       <FindingsBody findings={findings} filtered={table.filtered} loading={loading} />
 
-      <FindingsExportActions findings={table.filtered} scanId={activeScan?.id} />
+      <FindingsExportActions
+        findings={table.filtered}
+        scanId={activeScan?.id}
+        filtered={filtersActive({
+          search: table.searchQuery,
+          severity: table.severityFilter,
+          ecosystem: table.ecosystemFilter,
+        })}
+      />
     </div>
   )
 }

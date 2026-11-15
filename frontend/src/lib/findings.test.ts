@@ -5,6 +5,7 @@ import {
   findingsEmptyKind,
   findingsFilename,
   findingsToCSV,
+  filtersActive,
 } from "@/lib/findings";
 
 function finding(overrides: Partial<FindingRecord> = {}): FindingRecord {
@@ -72,6 +73,25 @@ describe("findingsFilename", () => {
 
   it("falls back to latest before a scan is committed", () => {
     expect(findingsFilename(undefined, "json")).toBe("findings-latest.json");
+  });
+
+  it("marks a filtered subset so it cannot overwrite the full export", () => {
+    expect(findingsFilename(31, "csv", { filtered: true })).toBe("findings-31-filtered.csv");
+    expect(findingsFilename(undefined, "json", { filtered: true })).toBe(
+      "findings-latest-filtered.json",
+    );
+  });
+});
+
+describe("filtersActive", () => {
+  it("is false while every filter sits at its default", () => {
+    expect(filtersActive({ search: "", severity: "all", ecosystem: "all" })).toBe(false);
+  });
+
+  it("is true for a search, a severity, or an ecosystem", () => {
+    expect(filtersActive({ search: "lodash", severity: "all", ecosystem: "all" })).toBe(true);
+    expect(filtersActive({ search: "", severity: "high", ecosystem: "all" })).toBe(true);
+    expect(filtersActive({ search: "", severity: "all", ecosystem: "pypi" })).toBe(true);
   });
 });
 
