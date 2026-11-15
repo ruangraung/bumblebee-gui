@@ -10,6 +10,46 @@ import json
 from pathlib import Path
 from typing import Any
 
+# A catalogue is one JSON document of package entries; the bundled set ships a
+# few megabytes total. A path far larger than that is not a catalogue, and
+# reading it whole would stall the request that named it.
+MAX_CATALOGUE_BYTES = 64 * 1024 * 1024
+
+
+def problem_for_catalogue(value: str | None) -> str | None:
+    """What rules a requested catalogue path out, or None when it is usable.
+
+    Custom catalogues are a feature, so the path is not confined to the
+    bundled directory; it only has to be a real absolute path, small enough
+    that reading it cannot stall the scan request.
+    """
+    if not value:
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        return (
+            f"Catalogue path {value} is relative, but the scanner runs inside the "
+            "container. Give an absolute path, such as /opt/bumblebee/threat-intel."
+        )
+    try:
+        if path.is_dir():
+            size = sum(entry.stat().st_size for entry in path.glob("*.json"))
+        elif path.is_file():
+            size = path.stat().st_size
+        else:
+            return (
+                f"Catalogue path {value} does not exist inside the container. "
+                "A scan with no catalogues to compare against reports no matches."
+            )
+    except OSError as error:
+        return f"Catalogue path {value} could not be read: {error}."
+    if size > MAX_CATALOGUE_BYTES:
+        return (
+            f"Catalogue {value} is {size:,} bytes, over the "
+            f"{MAX_CATALOGUE_BYTES:,} byte limit. Shrink it or point at a directory."
+        )
+    return None
+
 
 def _versions_in(entry: Any) -> int:
     if not isinstance(entry, dict):

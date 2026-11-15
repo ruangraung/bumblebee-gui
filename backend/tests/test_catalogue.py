@@ -1,11 +1,14 @@
 import json
 
-from bumblebee_gui.catalogue import catalogue_summary
+from bumblebee_gui import catalogue as catalogue_module
+from bumblebee_gui.catalogue import catalogue_summary, problem_for_catalogue
 
 
 def _catalogue(directory, name: str, entries) -> None:
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / name).write_text(json.dumps({"schema_version": "0.1.0", "entries": entries}))
+    (directory / name).write_text(
+        json.dumps({"schema_version": "0.1.0", "entries": entries})
+    )
 
 
 def test_counts_catalogues_entries_and_versions(tmp_path):
@@ -55,3 +58,42 @@ def test_a_missing_directory_counts_nothing_and_says_so(tmp_path):
     assert summary["available"] is False
     assert summary["catalogues"] == 0
     assert summary["versions"] == 0
+
+
+def test_a_relative_catalogue_path_is_refused():
+    problem = problem_for_catalogue("somewhere/catalogues")
+
+    assert problem is not None
+    assert "absolute path" in problem
+
+
+def test_an_absent_catalogue_path_is_refused():
+    problem = problem_for_catalogue("/opt/definitely/not/here")
+
+    assert problem is not None
+    assert "does not exist" in problem
+
+
+def test_an_oversized_catalogue_file_is_refused(tmp_path):
+    catalogue = tmp_path / "huge.json"
+    catalogue.write_bytes(b"[" + b'{"versions": []},' * 2 + b"]")
+    oversize = tmp_path / "oversize.json"
+    with open(oversize, "wb") as handle:
+        handle.truncate(catalogue_module.MAX_CATALOGUE_BYTES + 1)
+
+    problem = problem_for_catalogue(str(oversize))
+
+    assert problem is not None
+    assert "byte limit" in problem
+
+
+def test_a_catalogue_directory_within_the_limit_is_accepted(tmp_path):
+    catalogue = tmp_path / "catalogue.json"
+    catalogue.write_text('{"entries": [{"versions": ["1.0"]}]}')
+
+    assert problem_for_catalogue(str(tmp_path)) is None
+
+
+def test_an_empty_catalogue_value_means_bundled_and_is_accepted():
+    assert problem_for_catalogue(None) is None
+    assert problem_for_catalogue("") is None
