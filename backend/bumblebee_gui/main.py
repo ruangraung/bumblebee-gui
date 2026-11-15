@@ -1,12 +1,15 @@
 import asyncio
+import hmac
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .api_helpers import (
     attach_packages_found,
@@ -32,14 +35,14 @@ from .exporters import EXPORT_FORMATS, ExportPayload, build_export_response
 from .models import (
     CatalogueSummary,
     FindingRecord,
+    HistoryDeletionResult,
     HostMountReport,
     PackageRecord,
-    ScanRecord,
-    ScanHistoryPage,
     ScanDeletionFailure,
-    HistoryDeletionResult,
-    ScanRequest,
+    ScanHistoryPage,
     ScannerInfo,
+    ScanRecord,
+    ScanRequest,
     ScanStatus,
 )
 from .receipt import build_receipt
@@ -144,6 +147,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class TokenMiddleware:
+    """Require a shared token on /api when BUMBLEBEE_API_TOKEN is set.
+
+    Off by default: the documented install publishes the API on loopback only.
+    Operators who serve it wider set the variable and restart. The value is
+    read per request so rotating it does not need a restart either.
+    """
+
+    def __init__(self, app, header: bytes = b"x-bumblebee-token"):
+        self.app = app
+        self.header = header
+
+    def _token_required(self, scope) -> bool:
+        if scope["type"] != "http" or scope["method"] == "OPTIONS":
+            return False
+        return scope["path"].startswith("/api/")
+
+    async def __call__(self, scope, receive, send):
+        if self._token_required(scope):
+            token = os.environ.get("BUMBLEBEE_API_TOKEN")
+            if token:
+                headers = {name: value for name, value in scope["headers"]}
+                provided = headers.get(self.header, b"")
+                if not hmac.compare_digest(provided, token.encode()):
+                    response = JSONResponse(
+                        {"detail": "missing or invalid API token"}, status_code=401
+                    )
+                    await response(scope, receive, send)
+                    return
+        await self.app(scope, receive, send)
+
+
+# Host names that may appear in the Host header. localhost and 127.0.0.1 cover
+# direct browser use; "backend" is what the compose proxy rewrites the Host to
+# (changeOrigin in vite.config.ts); "testserver" is Starlette's test client.
+# Without this list, a page the operator visits can rebind a hostname to
+# 127.0.0.1 and drive the API same-origin. BUMBLEBEE_ALLOWED_HOSTS adds names
+# such as a ts.net hostname when the app is served wider.
+_DEFAULT_HOSTS = "localhost,127.0.0.1,backend,testserver"
+allowed_hosts = [
+    name.strip()
+    for name in os.environ.get("BUMBLEBEE_ALLOWED_HOSTS", _DEFAULT_HOSTS).split(",")
+    if name.strip()
+]
+app.add_middleware(TokenMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
 
 @app.get("/")
@@ -321,7 +372,9 @@ async def scan_history(
     scans, total = await get_scan_history(limit=limit, offset=offset)
     return ScanHistoryPage(
         scans=[attach_packages_found(scan) for scan in scans],
-        total=total, offset=offset, limit=limit,
+        total=total,
+        offset=offset,
+        limit=limit,
     )
 
 
@@ -360,7 +413,11 @@ async def scan_events(scan_id: int):
     scan = await get_scan_detail(scan_id)  # 404s for unknown scans
     # Subscribe before the stream starts, so progress published while the
     # response is being set up is buffered rather than missed.
-    queue = None if scan.status in (ScanStatus.completed, ScanStatus.failed) else _subscribers.subscribe(scan_id)
+    queue = (
+        None
+        if scan.status in (ScanStatus.completed, ScanStatus.failed)
+        else _subscribers.subscribe(scan_id)
+    )
 
     async def event_stream():
         snapshot = {
@@ -433,7 +490,9 @@ async def _delete_history_record(scan_id: int) -> ScanDeletionFailure | None:
             return ScanDeletionFailure(id=scan_id, detail="Could not delete this scan.")
     except Exception:
         logger.exception("History deletion failed for scan %s", scan_id)
-        return ScanDeletionFailure(id=scan_id, detail="Could not delete this scan data. Retry deletion.")
+        return ScanDeletionFailure(
+            id=scan_id, detail="Could not delete this scan data. Retry deletion."
+        )
     return None
 
 
@@ -454,7 +513,9 @@ async def delete_scan_history():
         else:
             failures.append(failure)
     _, remaining = await get_scan_history(limit=1)
-    return HistoryDeletionResult(deleted_ids=deleted_ids, failures=failures, remaining=remaining)
+    return HistoryDeletionResult(
+        deleted_ids=deleted_ids, failures=failures, remaining=remaining
+    )
 
 
 @app.get("/api/scans/{scan_id}/packages", response_model=list[PackageRecord])
