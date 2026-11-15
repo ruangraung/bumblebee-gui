@@ -1,76 +1,37 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+# Native installation is not supported yet.
+#
+# The backend is a FastAPI service and the frontend is a Vite build. A native
+# install would have to reproduce what the container already does: a Python
+# environment, the Node build, the scanner binary compiled from a pinned
+# upstream commit, and the exposure catalogue set. Until that packaging work
+# exists, this script refuses instead of half-installing.
+#
+# Supported path: Docker Compose. See README, "Quick start".
 
-echo "🐝 Installing Bumblebee GUI..."
+set -u
 
-# Detect platform
-OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-ARCH=$(uname -m)
+cat <<'MESSAGE'
+Bumblebee GUI has no native installer yet.
 
-case "$OS" in
-    darwin)
-        case "$ARCH" in
-            arm64) PLATFORM="darwin_arm64" ;;
-            x86_64) PLATFORM="darwin_amd64" ;;
-            *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-        esac
-        ;;
-    linux)
-        case "$ARCH" in
-            x86_64) PLATFORM="linux_amd64" ;;
-            aarch64) PLATFORM="linux_arm64" ;;
-            *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-        esac
-        ;;
-    *)
-        echo "Unsupported OS: $OS"
-        exit 1
-        ;;
-esac
+This script used to download two archives and write a launcher. It now stops
+before changing anything, because that path cannot work: the GUI archive it
+named returns 404, and the scanner release it fetched is two versions behind and
+cannot read the exposure catalogues this project ships.
 
-echo "Detected platform: $PLATFORM"
+Use the supported path instead:
 
-# Create installation directory
-INSTALL_DIR="$HOME/.bumblebee-gui"
-mkdir -p "$INSTALL_DIR/bin"
+  git clone https://github.com/ruangraung/bumblebee-gui
+  cd bumblebee-gui
+  docker compose up -d --build
+  # then open http://localhost:5173
 
-# Download Bumblebee binary
-BUMBLEBEE_VERSION="0.1.1"
-BUMBLEBEE_URL="https://github.com/perplexityai/bumblebee/releases/download/v${BUMBLEBEE_VERSION}/bumblebee_${BUMBLEBEE_VERSION}_${PLATFORM}.tar.gz"
+The README section "Quick start" carries the same steps with the expected
+output, and "Scanning a directory on the host" covers the variant that reads a
+host directory instead of the container's own environment.
 
-echo "Downloading Bumblebee v${BUMBLEBEE_VERSION}..."
-curl -L "$BUMBLEBEE_URL" | tar -xz -C "$INSTALL_DIR/bin/"
+Windows has no native path either: upstream publishes no Windows build of the
+scanner.
+MESSAGE
 
-# Download Bumblebee GUI
-GUI_VERSION="0.1.0"
-GUI_URL="https://github.com/user/bumblebee-gui/releases/download/v${GUI_VERSION}/bumblebee-gui_${GUI_VERSION}_${PLATFORM}.tar.gz"
-
-echo "Downloading Bumblebee GUI v${GUI_VERSION}..."
-curl -L "$GUI_URL" | tar -xz -C "$INSTALL_DIR/"
-
-# Create launcher script
-cat > "$INSTALL_DIR/bin/bumblebee-gui" << 'EOF'
-#!/bin/bash
-cd "$HOME/.bumblebee-gui"
-python3 -m bumblebee_gui "$@"
-EOF
-chmod +x "$INSTALL_DIR/bin/bumblebee-gui"
-
-# Add to PATH if not already there
-SHELL_RC="$HOME/.bashrc"
-[ -f "$HOME/.zshrc" ] && SHELL_RC="$HOME/.zshrc"
-
-if ! grep -q ".bumblebee-gui/bin" "$SHELL_RC"; then
-    echo 'export PATH="$HOME/.bumblebee-gui/bin:$PATH"' >> "$SHELL_RC"
-    echo "Added to PATH in $SHELL_RC"
-fi
-
-echo ""
-echo "✅ Installation complete!"
-echo ""
-echo "To start Bumblebee GUI:"
-echo "  source $SHELL_RC"
-echo "  bumblebee-gui"
-echo ""
-echo "Or run directly:"
-echo "  $INSTALL_DIR/bin/bumblebee-gui"
+exit 1
