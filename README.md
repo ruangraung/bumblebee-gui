@@ -184,6 +184,20 @@ and removes the partial output.
 | `GET` | `/api/scans/{id}/findings` | Catalogue matches from a completed scan |
 | `GET` | `/api/scans/{id}/export` | Export scan data as JSON or CSV |
 
+### What a scan records about itself
+
+Every scan stores a receipt describing what it ran with, written when the scan
+starts rather than reconstructed afterwards. It holds the scanner version and
+commit, the requested and resolved roots, the ecosystems and options, and the
+catalogue that was compared against, with a `sha256` digest of each catalogue
+file. `exposure_comparison` says whether packages were actually compared against
+a catalogue, so an inventory-only scan cannot be read as though matching ran.
+
+The purpose is that an old result stays explicable. Rebuilding the image with
+newer catalogues changes the current install, not the record of what a previous
+scan used. Scans written before receipts existed report `receipt: null`, which
+means unknown provenance, not the catalogues installed today.
+
 ## Scan profiles
 
 | Profile | Use case | Scans |
