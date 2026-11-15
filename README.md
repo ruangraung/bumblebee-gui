@@ -299,6 +299,11 @@ Scan data lives in `~/.bumblebee-gui/`, overridable with `BUMBLEBEE_DATA_DIR`:
 - **Nothing baked in blindly.** The bundled threat intel is pinned by commit and verified per file during the
   image build, and the CLI binary is pinned by version and sha256 for the same reason.
 - **No credentials in the code.** Configuration comes from the environment.
+- **Scan roots reach the container's filesystem by design.** The scanner walks the container it
+  lives in, so requested roots are not confined to the host mount. The API answers only to the
+  Host names it knows: localhost, 127.0.0.1, the compose proxy name, and whatever you add through
+  `BUMBLEBEE_ALLOWED_HOSTS`. If you serve the API beyond loopback, add those host names and set
+  `BUMBLEBEE_API_TOKEN` so every `/api` call carries the token.
 - **Five gates on every change**, listed above.
 
 ## Contributing
