@@ -9,15 +9,24 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
+# Install dependencies from the committed lockfile, the same set the CI
+# audit runs against
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci
 
-# Install Playwright (inside container, not on host)
+# Install Playwright (inside container, not on host). The browsers land in a
+# shared path so the runtime user can execute them.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npx playwright install --with-deps chromium
 
 # Copy application code
 COPY frontend/ .
+
+# The dev server and its cache write inside /app, so the tree belongs to the
+# user that runs it instead of root.
+RUN chown -R node:node /app
+
+USER node
 
 EXPOSE 5173
 
