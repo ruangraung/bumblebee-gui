@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from .models import ScanRecord, ScanProfile, ScanStatus, ScanSummary
+from .models import ScanReceipt, ScanRecord, ScanProfile, ScanStatus, ScanSummary
 
 DB_DIR = Path(os.environ.get("BUMBLEBEE_DATA_DIR", Path.home() / ".bumblebee-gui"))
 DB_PATH = DB_DIR / "bumblebee-gui.db"
@@ -49,6 +49,7 @@ async def _add_missing_columns(db) -> None:
         ("duration_ms", "INTEGER"),
         ("files_considered", "INTEGER"),
         ("error", "TEXT"),
+        ("receipt", "TEXT"),
     ):
         if column not in existing:
             await db.execute(f"ALTER TABLE scans ADD COLUMN {column} {kind}")
@@ -69,6 +70,23 @@ def _summary_from_row(row) -> Optional[ScanSummary]:
     )
 
 
+def _receipt_from_row(row) -> Optional[ScanReceipt]:
+    """Rebuild a receipt, None when the scan predates receipts.
+
+    A row written before this column existed has nothing to rebuild from, and a
+    receipt invented now would describe today's catalogues rather than what that
+    scan actually compared against. Unreadable JSON is treated the same way: the
+    record says unknown instead of guessing.
+    """
+    raw = row["receipt"]
+    if not raw:
+        return None
+    try:
+        return ScanReceipt.model_validate_json(raw)
+    except ValueError:
+        return None
+
+
 def _record_from_row(row) -> ScanRecord:
     """Map a scans row onto its API model.
 
@@ -83,36 +101,34 @@ def _record_from_row(row) -> ScanRecord:
         summary=_summary_from_row(row),
         ndjson_path=row["ndjson_path"],
         error=row["error"],
+        receipt=_receipt_from_row(row),
     )
 
 
 async def insert_scan(
     profile: ScanProfile,
     status: ScanStatus,
-    summary: Optional[ScanSummary] = None,
     ndjson_path: Optional[str] = None,
+    receipt: Optional[ScanReceipt] = None,
 ) -> int:
-    """Insert a new scan record and return its ID."""
+    """Insert a new scan record and return its ID.
+
+    Only the facts known when a scan starts. A summary arrives later through
+    update_scan_status, so this stays the single writer for each kind of fact
+    instead of offering a second way to write a summary from here.
+    """
     async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute(
             """
-            INSERT INTO scans (timestamp, profile, status, total_packages, 
-                             ecosystems_found, findings_count, ecosystem_counts, ndjson_path,
-                             timed_out, duration_ms, files_considered)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scans (timestamp, profile, status, ndjson_path, receipt)
+            VALUES (?, ?, ?, ?, ?)
             """,
             (
                 datetime.now(timezone.utc).isoformat(),
                 profile.value,
                 status.value,
-                summary.total_packages if summary else None,
-                summary.ecosystems_found if summary else None,
-                summary.findings_count if summary else None,
-                json.dumps(summary.ecosystem_counts) if summary else None,
                 ndjson_path,
-                int(summary.timed_out) if summary else None,
-                summary.duration_ms if summary else None,
-                summary.files_considered if summary else None,
+                receipt.model_dump_json() if receipt else None,
             ),
         )
         await db.commit()

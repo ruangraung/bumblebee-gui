@@ -18,14 +18,13 @@ def _versions_in(entry: Any) -> int:
     return len(versions) if isinstance(versions, list) else 0
 
 
-def catalogue_summary(directory: Path) -> dict:
-    """Count the catalogues in `directory`.
+def catalogue_counts(files: list[Path]) -> dict:
+    """Count the catalogues among these specific files.
 
-    A file that cannot be read or parsed is skipped rather than raised on: this
-    count is rendered beside a scan result, and a malformed catalogue is a
-    packaging problem, not a reason to fail the page.
+    Counts over an explicit file list so a single custom catalogue file gets the
+    same treatment as a bundled directory, instead of a second implementation
+    drifting from this one.
     """
-    files = sorted(directory.glob("*.json")) if directory.is_dir() else []
     catalogues = 0
     entries = 0
     versions = 0
@@ -48,3 +47,14 @@ def catalogue_summary(directory: Path) -> dict:
         "versions": versions,
         "available": catalogues > 0,
     }
+
+
+def catalogue_summary(directory: Path) -> dict:
+    """Count the catalogues in `directory`.
+
+    A file that cannot be read or parsed is skipped rather than raised on: this
+    count is rendered beside a scan result, and a malformed catalogue is a
+    packaging problem, not a reason to fail the page.
+    """
+    files = sorted(directory.glob("*.json")) if directory.is_dir() else []
+    return catalogue_counts(files)

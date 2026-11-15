@@ -71,6 +71,54 @@ class ScannerInfo(BaseModel):
     error: Optional[str] = None
 
 
+class CatalogueReceipt(BaseModel):
+    """Which catalogue a scan compared against, and what was in it.
+
+    ``mode`` is what the request asked for: ``bundled`` when it named nothing and
+    this install ships catalogues, ``custom`` when it named a path, ``disabled``
+    when it asked for none. A ``bundled`` mode with no ``path`` means the request
+    wanted the bundled set and none was installed, which is a different fact from
+    asking for no comparison at all.
+    """
+
+    mode: str
+    path: Optional[str] = None
+    catalogues: int = 0
+    entries: int = 0
+    versions: int = 0
+    # sha256 of every catalogue file that was actually present, so a later rebuild
+    # cannot silently change what an old result claims to have compared against.
+    digests: dict[str, str] = {}
+
+
+class ScanReceipt(BaseModel):
+    """What a scan actually ran with, recorded when it started.
+
+    The scans row carries the profile, status and summary but not the request or
+    the identity of the catalogue, so a historical or custom-catalogue scan used
+    to display the bundled-catalogue comparison, and rebuilding with new
+    catalogues changed the denominator under an old result. This is the snapshot
+    taken at execution, and it is never reconstructed from the current image.
+    """
+
+    recorded_at: datetime
+    profile: ScanProfile
+    requested_roots: List[str] = []
+    # Absolute forms of the requested roots. Empty when the request named none,
+    # in which case the profile decides the roots and this receipt says so by
+    # saying nothing.
+    resolved_roots: List[str] = []
+    ecosystems: List[str] = []
+    findings_only: bool = False
+    max_duration: Optional[str] = None
+    scanner_version: Optional[str] = None
+    scanner_commit: Optional[str] = None
+    catalogue: CatalogueReceipt
+    # Whether packages were actually compared against anything. An inventory-only
+    # scan must not read as though exposure comparison happened.
+    exposure_comparison: bool = False
+
+
 class ScanRecord(BaseModel):
     id: int
     timestamp: datetime
@@ -84,6 +132,9 @@ class ScanRecord(BaseModel):
     # Live progress: packages discovered so far while running; final total when
     # completed. Computed on read — not stored in the database.
     packages_found: Optional[int] = None
+    # What this scan ran with. None on records written before receipts existed,
+    # which reads as unknown provenance rather than as the current image.
+    receipt: Optional[ScanReceipt] = None
 
 
 class ScanHistoryPage(BaseModel):

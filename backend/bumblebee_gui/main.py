@@ -42,6 +42,7 @@ from .models import (
     ScannerInfo,
     ScanStatus,
 )
+from .receipt import build_receipt
 from .roots import HOST_MOUNT, host_mount_report, inside_mount, root_problems
 from .scan_events import TERMINAL_TYPES, ScanSubscribers
 from .scanner import (
@@ -222,11 +223,13 @@ async def _run_scan_background(
 
 async def _insert_running_scan(request: ScanRequest, ndjson_path: Path) -> int:
     """Recover the committed ID before rolling back a cancelled insertion."""
+    receipt = build_receipt(request, await cli_info())
     insertion = asyncio.create_task(
         insert_scan(
             profile=request.profile,
             status=ScanStatus.running,
             ndjson_path=str(ndjson_path),
+            receipt=receipt,
         )
     )
     try:
