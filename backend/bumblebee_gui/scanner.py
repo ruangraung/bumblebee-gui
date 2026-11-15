@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, List, Optional
 
+from .duration import normalise_duration
 from .models import (
     ScanRequest,
     ScannerInfo,
@@ -65,7 +66,7 @@ def build_command(request: ScanRequest) -> List[str]:
     cmd += repeat_option("--root", request.roots)
     cmd += valued_option("--exposure-catalog", exposure_catalog(request))
     cmd += toggle_option("--findings-only", request.findings_only)
-    cmd += valued_option("--max-duration", request.max_duration)
+    cmd += valued_option("--max-duration", normalise_duration(request.max_duration))
     return cmd
 
 

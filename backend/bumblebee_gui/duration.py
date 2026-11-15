@@ -47,13 +47,25 @@ def _sign_problem(text: str) -> Optional[str]:
     return None
 
 
+def normalise_duration(value: Optional[str]) -> Optional[str]:
+    """The value the scanner should receive, or None when the flag is left off.
+
+    One reader for both halves. Validation and command construction used to read
+    the request separately, which let a padded but valid value pass the check and
+    then reach a parser that does not trim, and let a whitespace-only value count
+    as unset while still being appended as a nonempty argument.
+    """
+    text = (value or "").strip()
+    return text or None
+
+
 def problem_for_duration(value: Optional[str]) -> Optional[str]:
     """What rules one max-duration value out, or None when the scanner takes it.
 
     An unset value is not a problem: it means the scanner decides how long a
     scan may run.
     """
-    text = (value or "").strip()
+    text = normalise_duration(value)
     if not text:
         return None
 
