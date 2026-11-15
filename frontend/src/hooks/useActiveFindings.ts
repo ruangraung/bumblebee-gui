@@ -12,14 +12,17 @@ export function useActiveFindings(scanId?: string) {
     scans,
     findingsByScan,
     loading,
-    error,
+    error: storeError,
     fetchScans,
     fetchFindings,
     waitForScan,
     clearError,
   } = useScanStore()
 
-  const selection = useScanSelection(scans, scanId, resolveFindingsScan, { loading, error })
+  const selection = useScanSelection(scans, scanId, resolveFindingsScan, {
+    loading,
+    error: storeError,
+  })
   const { activeScan } = selection
 
   // Per-scan cache read: empty until that scan's findings have been fetched.
@@ -34,10 +37,14 @@ export function useActiveFindings(scanId?: string) {
   // fetched for a completed scan.
   useResultCompletion(activeScan, waitForScan, selection.updateRequested)
 
+  // Clearing a load error retries the fetch. Without this, dismissing the
+  // error leaves the empty per-scan cache in place and the page reads as a
+  // scan that matched nothing.
   useEffect(() => {
+    if (storeError !== null) return
     const missing = findingsToFetch(findingsByScan, activeScan)
     if (missing !== null) fetchFindings(missing)
-  }, [activeScan, findingsByScan, fetchFindings])
+  }, [storeError, activeScan, findingsByScan, fetchFindings])
 
   return { scans, activeScan, findings, loading: selection.loading, error: selection.error, clearError }
 }
