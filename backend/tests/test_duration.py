@@ -5,7 +5,7 @@ it cannot, so a value that reaches it unusable costs a whole scan and reports
 no packages.
 """
 
-from bumblebee_gui.duration import problem_for_duration
+from bumblebee_gui.duration import normalise_duration, problem_for_duration
 
 
 def _refusal(value: str) -> str:
@@ -60,3 +60,27 @@ def test_a_negative_duration_is_refused():
     message = _refusal("-5m")
 
     assert "negative" in message
+
+
+# The value the scanner receives is the one validation read. Passing the raw
+# string instead let " 30s " through validation untouched and then reach a parser
+# that does not trim, and let a whitespace-only value count as unset while still
+# being appended as a nonempty argument.
+def test_normalisation_returns_the_value_the_scanner_should_receive():
+    assert normalise_duration(" 30s ") == "30s"
+    assert normalise_duration("30s") == "30s"
+    assert normalise_duration("1h30m") == "1h30m"
+
+
+def test_normalisation_reads_an_unset_value_as_no_flag():
+    assert normalise_duration(None) is None
+    assert normalise_duration("") is None
+    assert normalise_duration("   ") is None
+    assert normalise_duration("\n\t ") is None
+
+
+def test_validation_and_execution_agree_on_a_padded_value():
+    """Both halves read the same normalised text, so acceptance means usable."""
+    for value in (" 30s ", "\t5m", "2h\n"):
+        assert problem_for_duration(value) is None, value
+        assert normalise_duration(value) == value.strip()

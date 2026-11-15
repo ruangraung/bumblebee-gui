@@ -92,6 +92,26 @@ def test_build_command_multiple_roots(monkeypatch, tmp_path):
     ]
 
 
+def test_build_command_passes_the_normalised_duration(monkeypatch, tmp_path):
+    """Validation stripped the value, so the scanner has to receive that one.
+
+    A padded value passing validation and then reaching Go's parser untouched is
+    a whole scan lost to a whitespace character.
+    """
+    monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
+    cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline, max_duration=" 30s "))
+    assert cmd[-2:] == ["--max-duration", "30s"]
+
+
+def test_build_command_drops_a_whitespace_only_duration(monkeypatch, tmp_path):
+    """Whitespace reads as unset in validation, and it must here too."""
+    monkeypatch.setattr(scanner, "BINARY_PATH", BIN)
+    monkeypatch.setattr(scanner, "THREAT_INTEL_DIR", tmp_path / "absent")
+    cmd = scanner.build_command(ScanRequest(profile=ScanProfile.baseline, max_duration="   "))
+    assert "--max-duration" not in cmd
+
+
 # ── generate_ndjson_path ─────────────────────────────────────────────────────
 
 
