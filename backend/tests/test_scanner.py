@@ -423,6 +423,20 @@ for i in range(10000):
     time.sleep(0.02)
 """
 
+# Fake CLI: enough package lines to cross the progress throttle, then a heartbeat
+# forever. Used to make a progress callback raise in the middle of the stream.
+MANY_PACKAGES_SCRIPT = """\
+import json, os, sys, time
+hb = os.environ["FAKE_HEARTBEAT"]
+for i in range(40):
+    sys.stdout.write(json.dumps({"record_type": "package", "package_name": "pkg%d" % i}) + "\\n")
+    sys.stdout.flush()
+while True:
+    with open(hb, "a") as f:
+        f.write("beat\\n")
+    time.sleep(0.02)
+"""
+
 
 def test_run_scan_cancel_kills_subprocess(monkeypatch, tmp_path):
     """Cancelling run_scan kills the CLI process and keeps partial output."""
@@ -454,6 +468,62 @@ def test_run_scan_cancel_kills_subprocess(monkeypatch, tmp_path):
     time.sleep(0.2)
     size_later = heartbeat.stat().st_size if heartbeat.exists() else 0
     assert size_after == size_later, "subprocess kept running after cancellation"
+
+
+def test_a_write_failure_does_not_leave_the_cli_running(monkeypatch, tmp_path):
+    """Cancellation was not the only way out, and the others orphaned the CLI.
+
+    A write that fails (unwritable path, full disk) or a progress callback that
+    raises used to propagate straight out of `_run_cli` while the child kept
+    running with nobody reading its stdout, which eventually blocks it forever.
+    """
+    monkeypatch.setattr(scanner, "BINARY_PATH", str(_make_fake_cli(tmp_path, HEARTBEAT_SCRIPT)))
+    heartbeat = tmp_path / "heartbeat"
+    monkeypatch.setenv("FAKE_HEARTBEAT", str(heartbeat))
+
+    async def scenario():
+        cli = await scanner._spawn_cli([str(scanner.BINARY_PATH)])
+        # A directory where the output file belongs: the open fails after the
+        # child is already running.
+        with pytest.raises(OSError):
+            await scanner._run_cli(cli, tmp_path, None)
+        return cli.process
+
+    process = asyncio.run(scenario())
+
+    assert process.returncode is not None, "the CLI was left unreaped after a write failure"
+    size_after = heartbeat.stat().st_size if heartbeat.exists() else 0
+    time.sleep(0.2)
+    size_later = heartbeat.stat().st_size if heartbeat.exists() else 0
+    assert size_after == size_later, "subprocess kept running after a write failure"
+
+
+def test_a_failing_progress_callback_does_not_leave_the_cli_running(monkeypatch, tmp_path):
+    """The other non-cancellation exit: a callback that raises mid-stream.
+
+    The throttle reports every 25 packages, so the fake CLI emits enough lines to
+    cross it and the callback raises inside the stream loop.
+    """
+    monkeypatch.setattr(scanner, "BINARY_PATH", str(_make_fake_cli(tmp_path, MANY_PACKAGES_SCRIPT)))
+    heartbeat = tmp_path / "heartbeat"
+    monkeypatch.setenv("FAKE_HEARTBEAT", str(heartbeat))
+
+    def explode(_count: int) -> None:
+        raise RuntimeError("progress reporting broke")
+
+    async def scenario():
+        cli = await scanner._spawn_cli([str(scanner.BINARY_PATH)])
+        with pytest.raises(RuntimeError):
+            await scanner._run_cli(cli, tmp_path / "out.ndjson", explode)
+        return cli.process
+
+    process = asyncio.run(scenario())
+
+    assert process.returncode is not None, "the CLI was left unreaped after a callback failure"
+    size_after = heartbeat.stat().st_size if heartbeat.exists() else 0
+    time.sleep(0.2)
+    size_later = heartbeat.stat().st_size if heartbeat.exists() else 0
+    assert size_after == size_later, "subprocess kept running after a callback failure"
 
 
 # ── bundled exposure catalogues ──────────────────────────────────────────────

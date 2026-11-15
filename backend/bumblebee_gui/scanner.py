@@ -124,10 +124,16 @@ async def _stream_to_file(stream, ndjson_path: Path, on_progress) -> None:
             progress.observe(line)
 
 
-async def _abort(process, stderr_task) -> None:
-    """Kill a cancelled scan's CLI, reap it and release its stderr reader."""
-    process.kill()
-    await process.wait()
+async def _reap(process, stderr_task) -> None:
+    """Kill a CLI that outlived its reader, then release the stderr task.
+
+    The one cleanup path, used by every exit from `_run_cli`. Killing an already
+    dead process is avoided by the returncode check, so the normal path pays
+    nothing for this.
+    """
+    if process.returncode is None:
+        process.kill()
+        await process.wait()
     if stderr_task.done():
         return
     stderr_task.cancel()
@@ -141,18 +147,18 @@ async def _run_cli(cli: _CliProcess, ndjson_path: Path, on_progress) -> bytes:
     """Stream the CLI output to disk, then wait for it and return its stderr.
 
     The stderr reader is drained concurrently so a chatty CLI cannot deadlock
-    the stream.
+    the stream. Every exit path owns the child: cancellation, a write that fails,
+    a progress callback that raises, and the normal completion all pass through
+    the same cleanup, because a scan nobody is reading any more must not keep
+    scanning in the background.
     """
     stderr_task = asyncio.create_task(cli.stderr.read())
     try:
         await _stream_to_file(cli.stdout, ndjson_path, on_progress)
         await cli.process.wait()
         return await stderr_task
-    except asyncio.CancelledError:
-        # Cancellation (user aborted the scan): kill the CLI, reap it, and
-        # release the stderr reader before propagating.
-        await _abort(cli.process, stderr_task)
-        raise
+    finally:
+        await _reap(cli.process, stderr_task)
 
 
 async def run_scan(
