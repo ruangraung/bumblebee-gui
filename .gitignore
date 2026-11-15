@@ -93,3 +93,6 @@ docs/
 # Playwright
 frontend/test-results/
 frontend/playwright-report/
+
+# TypeScript incremental build state (tsc -p tsconfig.node.json writes this)
+frontend/tsconfig.node.tsbuildinfo
