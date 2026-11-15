@@ -97,3 +97,76 @@ jobs:
         run: npm run test
       - name: Type-check + build
         run: npm run build
+
+  # The Playwright suites existed for months without a runner, so they guarded
+  # nothing. They run here against the built bundle served by `vite preview`,
+  # with a real backend on 8001 driven by the scripted scanner in
+  # scripts/fake-scanner.sh. Deliberately not a required check yet: a browser
+  # suite that has only ever run on one machine has to prove itself first.
+  browser:
+    name: Browser tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Install frontend dependencies (locked)
+        working-directory: frontend
+        run: npm ci
+      - name: Install Playwright chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start the API
+        env:
+          BUMBLEBEE_BINARY: ${{ github.workspace }}/scripts/fake-scanner.sh
+          BUMBLEBEE_DATA_DIR: /tmp/bumblebee-gui-data
+          BUMBLEBEE_THREAT_INTEL_DIR: /tmp/bumblebee-threat-intel
+        run: |
+          chmod +x scripts/fake-scanner.sh
+          mkdir -p "$BUMBLEBEE_DATA_DIR" "$BUMBLEBEE_THREAT_INTEL_DIR"
+          cd backend
+          nohup python -m uvicorn bumblebee_gui.main:app --host 127.0.0.1 --port 8001 > /tmp/api.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8001/api/health > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "The API did not become ready in 30s."
+          cat /tmp/api.log
+          exit 1
+      - name: Build the frontend
+        working-directory: frontend
+        run: npm run build
+      - name: Serve the built bundle
+        working-directory: frontend
+        run: |
+          nohup npm run preview -- --port 5173 --strictPort > /tmp/preview.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "The preview server did not become ready in 30s."
+          cat /tmp/preview.log
+          exit 1
+      - name: Playwright
+        working-directory: frontend
+        env:
+          BASE_URL: http://127.0.0.1:5173
+          API_URL: http://127.0.0.1:8001
+        run: npx playwright test
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            frontend/test-results
+            frontend/playwright-report
+          retention-days: 7
