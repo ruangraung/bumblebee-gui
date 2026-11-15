@@ -1,25 +1,11 @@
-import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Sun, Moon, Monitor } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { useTheme } from '@/components/ThemeProvider'
 import { AboutPanel } from '@/components/AboutPanel'
 import { ScanHistoryPanel } from '@/components/ScanHistoryPanel'
 import { PRESETS } from '@/lib/scanForm'
 import { cn } from '@/lib/utils'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type Theme = 'light' | 'dark' | 'system'
-
-const THEMES: Theme[] = ['light', 'dark', 'system']
-
-// Dark first, and a stored choice wins when it is one this app understands.
-function storedTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark'
-  const stored = localStorage.getItem('theme') as Theme | null
-  return stored && THEMES.includes(stored) ? stored : 'dark'
-}
 
 // ---------------------------------------------------------------------------
 // Settings Page
@@ -27,23 +13,8 @@ function storedTheme(): Theme {
 
 export default function Settings() {
   // ---- Theme (dark-first) ------------------------------------------------
-  const [theme, setTheme] = useState<Theme>(storedTheme)
-
-  useEffect(() => {
-    const root = document.documentElement
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-
-    function applyTheme() {
-      const effectiveDark = theme === 'dark' || (theme === 'system' && mq.matches)
-      root.classList.toggle('dark', effectiveDark)
-    }
-
-    applyTheme()
-    localStorage.setItem('theme', theme)
-
-    mq.addEventListener('change', applyTheme)
-    return () => mq.removeEventListener('change', applyTheme)
-  }, [theme])
+  // Owned by the theme provider; a second writer here destroyed a saved choice.
+  const { theme, setTheme } = useTheme()
 
   // ---- Render --------------------------------------------------------------
   return (
@@ -120,7 +91,7 @@ export default function Settings() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
       <h2 className="overline">{title}</h2>
@@ -137,7 +108,7 @@ function ThemeButton({
 }: {
   active: boolean
   onClick: () => void
-  icon: React.ReactNode
+  icon: ReactNode
   label: string
 }) {
   return (
