@@ -54,7 +54,10 @@ describe("spreadsheet formula injection", () => {
 
   it("marks a cell that would shift the row", () => {
     expect(escapeCSV("\tleading tab")).toBe("'\tleading tab");
-    expect(escapeCSV("\rleading return")).toBe("'\rleading return");
+    // The CR is marked as text AND quoted: quoting alone would leave a
+    // spreadsheet to run the cell, marking alone would leave a parser to
+    // split the row.
+    expect(escapeCSV("\rleading return")).toBe("\"'\rleading return\"");
   });
 
   it("leaves a scoped package name alone", () => {
@@ -69,4 +72,11 @@ describe("spreadsheet formula injection", () => {
   it("guards a package name written into a built row", () => {
     expect(buildCSV(["package_name"], [["=1+1"]])).toBe("package_name\n'=1+1");
   });
+});
+
+it("quotes a field that carries a bare carriage return", () => {
+  const csv = buildCSV(["name"], [["left\rvalue"]]);
+  expect(csv).toBe('name\n"left\rvalue"');
+  // The bare CR survives inside the quotes, so no viewer can split the row.
+  expect(csv.split("\r").length - 1).toBe(1);
 });

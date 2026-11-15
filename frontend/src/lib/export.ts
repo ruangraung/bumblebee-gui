@@ -1,8 +1,9 @@
 // Download and CSV helpers shared by the pages that export a file.
 //
-// RFC 4180: a field is quoted only when it carries a delimiter, a quote, or a
-// newline, and inner quotes are doubled.
-const NEEDS_QUOTING = /[",\n]/
+// RFC 4180: a field is quoted when it carries a delimiter, a quote, or a
+// newline — and the carriage return counts, because a bare CR splits the row
+// just as surely as a newline does.
+const NEEDS_QUOTING = /[",\r\n]/
 
 // RFC 4180 says nothing about how a spreadsheet reads a field once it is
 // parsed, and Excel, Sheets and LibreOffice run a cell that begins with =, + or
