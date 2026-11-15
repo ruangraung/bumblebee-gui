@@ -81,16 +81,48 @@ def generate_ndjson_path(profile: ScanProfile) -> Path:
     return Path(name)
 
 
+# One NDJSON line is one package or finding record; a real record is bytes to
+# tens of kilobytes. A longer line means a broken or hostile stream, not a
+# bigger package, and buffering it whole is how one scan could exhaust the
+# backend's memory.
+MAX_LINE_BYTES = 1024 * 1024
+MAX_STDERR_BYTES = 1024 * 1024
+
+
 async def _iter_lines(stream):
     """Yield complete lines from an async byte stream, buffering partials."""
     buf = b""
     async for chunk in stream:
         buf += chunk
+        if len(buf) > MAX_LINE_BYTES:
+            raise ValueError(
+                f"scanner emitted a line longer than {MAX_LINE_BYTES} bytes; "
+                "refusing to buffer it"
+            )
         *lines, buf = buf.split(b"\n")
         for line in lines:
             yield line.rstrip(b"\r")
     if buf:
         yield buf.rstrip(b"\r")
+
+
+async def _drain_stderr(stream) -> bytes:
+    """Read stderr to the end, keeping at most MAX_STDERR_BYTES of it.
+
+    Draining to the end matters: a CLI that writes more stderr than anyone
+    wants to keep would otherwise block on a full pipe and never exit. The
+    tail past the cap is discarded, not buffered.
+    """
+    parts: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await stream.read(65536)
+        if not chunk:
+            break
+        if total < MAX_STDERR_BYTES:
+            parts.append(chunk)
+            total += len(chunk)
+    return b"".join(parts)[:MAX_STDERR_BYTES]
 
 
 @dataclass
@@ -152,7 +184,7 @@ async def _run_cli(cli: _CliProcess, ndjson_path: Path, on_progress) -> bytes:
     the same cleanup, because a scan nobody is reading any more must not keep
     scanning in the background.
     """
-    stderr_task = asyncio.create_task(cli.stderr.read())
+    stderr_task = asyncio.create_task(_drain_stderr(cli.stderr))
     try:
         await _stream_to_file(cli.stdout, ndjson_path, on_progress)
         await cli.process.wait()

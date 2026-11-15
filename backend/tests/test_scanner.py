@@ -579,3 +579,34 @@ def test_cli_version_reads_the_version_and_short_commit():
 def test_cli_version_reports_nothing_it_cannot_parse():
     assert scanner.parse_cli_version("nothing familiar here\n") == (None, None)
     assert scanner.parse_cli_version("") == (None, None)
+
+
+def test_a_line_larger_than_the_cap_is_refused_not_buffered():
+    async def hostile_stream():
+        yield b"x" * (scanner.MAX_LINE_BYTES + 1)
+
+    async def consume():
+        lines = []
+        async for line in scanner._iter_lines(hostile_stream()):
+            lines.append(line)
+        return lines
+
+    with pytest.raises(ValueError, match="refusing to buffer"):
+        asyncio.run(consume())
+
+
+def test_stderr_is_drained_to_the_end_but_kept_within_the_cap():
+    class ChattyStderr:
+        def __init__(self, chunks):
+            self._chunks = list(chunks)
+
+        async def read(self, size):
+            if not self._chunks:
+                return b""
+            return self._chunks.pop(0)
+
+    loud = ChattyStderr([b"noise" * 100, b"more" * 100])
+    kept = asyncio.run(scanner._drain_stderr(loud))
+
+    assert len(kept) <= scanner.MAX_STDERR_BYTES
+    assert kept.startswith(b"noise")
