@@ -36,6 +36,12 @@ docker compose up -d
 Then open <http://localhost:5173>. The API listens on <http://localhost:8001> and documents itself at
 <http://localhost:8001/docs>.
 
+Both ports are bound to loopback, so nothing is reachable from another machine by default. If either port is
+already taken, compose fails with `Bind for 127.0.0.1:5173 failed: port is already allocated` before the
+stack comes up: stop whatever holds the port, or change the mapping in `docker-compose.yml`. A new install
+opens on an empty scan history, which is the expected first sight, and what a scan with no matches means is
+covered under [Exposure catalogues](#exposure-catalogues).
+
 A scan reads the filesystem inside the container, which is the Python environment the scanner itself runs in.
 That makes a useful smoke test, but it says nothing about your machine. Mount a directory to scan real code.
 
