@@ -9,11 +9,18 @@ policy, including the npm-scope case that must NOT be neutralised.
 
 import csv
 import io
+import asyncio
 from datetime import datetime, timezone
 
 import pytest
 
-from bumblebee_gui.exporters import ExportPayload, render_csv_export
+from bumblebee_gui.exporters import (
+    EXPORT_FORMATS,
+    ExportPayload,
+    build_export_response,
+    render_csv_export,
+    stream_chunks,
+)
 from bumblebee_gui.models import (
     FindingRecord,
     PackageRecord,
@@ -123,3 +130,46 @@ def test_ordinary_names_are_unchanged():
     rows = data_rows(rendered, width=9)
 
     assert [row[0] for row in rows] == ["left-pad", "lodash"]
+
+
+# Streaming the rendered body. A file-like object is iterated line by line, and
+# an indented JSON export of two hundred thousand packages is 2.2 million lines,
+# so the body is delivered in fixed size pieces instead.
+
+
+def test_stream_chunks_splits_on_the_chunk_size():
+    body = b"x" * (256 * 1024 + 10)
+
+    chunks = list(stream_chunks(body))
+
+    assert [len(chunk) for chunk in chunks] == [256 * 1024, 10]
+    assert b"".join(chunks) == body
+
+
+def test_stream_chunks_yields_a_short_body_once():
+    assert list(stream_chunks(b"abc")) == [b"abc"]
+
+
+def test_stream_chunks_yields_nothing_for_an_empty_body():
+    assert list(stream_chunks(b"")) == []
+
+
+def test_stream_chunks_refuses_a_zero_chunk_size():
+    with pytest.raises(ValueError):
+        list(stream_chunks(b"abc", chunk_size=0))
+
+
+def test_export_response_carries_the_whole_rendered_body():
+    """Chunking must not lose, duplicate or reorder a byte of the download."""
+    payload = build_payload([package("left-pad")])
+    response = build_export_response(9, payload, EXPORT_FORMATS["json"])
+
+    async def consume() -> bytes:
+        pieces = [chunk async for chunk in response.body_iterator]
+        return b"".join(piece for piece in pieces if isinstance(piece, bytes))
+
+    delivered = asyncio.run(consume()).decode()
+
+    assert delivered == EXPORT_FORMATS["json"].render(payload)
+    assert response.media_type == EXPORT_FORMATS["json"].media_type
+    assert "scan_9.json" in response.headers["content-disposition"]

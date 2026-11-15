@@ -10,7 +10,7 @@ import io
 import json
 import re
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterator
 
 from fastapi.responses import StreamingResponse
 
@@ -98,6 +98,22 @@ EXPORT_FORMATS: dict[str, ExportFormat] = {
 }
 
 
+def stream_chunks(body: bytes, chunk_size: int = 256 * 1024) -> Iterator[bytes]:
+    """Split a rendered export into fixed size pieces.
+
+    A file-like object handed to StreamingResponse is iterated by line, and every
+    line is its own trip through the threadpool plus its own ASGI body message.
+    An indented JSON export of two hundred thousand packages is 2.2 million short
+    lines, which measured at 107 microseconds each: 236 seconds to deliver 60 MB
+    that the server had ready in three. Fixed size chunks make the cost per byte
+    instead of per line.
+    """
+    if chunk_size < 1:
+        raise ValueError("chunk_size must be at least 1 byte")
+    for start in range(0, len(body), chunk_size):
+        yield body[start : start + chunk_size]
+
+
 def build_export_response(
     scan_id: int,
     payload: ExportPayload,
@@ -107,7 +123,7 @@ def build_export_response(
     content = export_format.render(payload)
     filename = f"scan_{scan_id}.{export_format.extension}"
     return StreamingResponse(
-        io.BytesIO(content.encode("utf-8")),
+        stream_chunks(content.encode("utf-8")),
         media_type=export_format.media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
