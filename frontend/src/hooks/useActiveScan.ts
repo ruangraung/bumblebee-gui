@@ -1,29 +1,11 @@
 import { useCallback, useEffect } from 'react'
 import { useScanStore } from '@/stores/scanStore'
 import { useScanSelection } from '@/hooks/useScanSelection'
-import type { ScanRecord } from '@/lib/api'
-import { isInProgress, packagesToFetch, resolveActiveScan, scanPackages } from '@/lib/scans'
+import { useResultCompletion } from '@/hooks/useResultCompletion'
+import { packagesToFetch, resolveActiveScan, scanPackages } from '@/lib/scans'
 
 // The scan a results view shows, its packages, and the lifecycle work that
 // keeps both fresh: load the list, fetch missing results, wait while running.
-function useResultCompletion(
-  scan: ScanRecord | null,
-  wait: (id: number) => Promise<ScanRecord | null>,
-  update: (scan: ScanRecord) => void,
-) {
-  useEffect(() => {
-    let active = true
-    if (scan && isInProgress(scan.status)) {
-      wait(scan.id).then((completed) => {
-        if (active && completed) update(completed)
-      }).catch(() => {
-        // Errors are surfaced through the store.
-      })
-    }
-    return () => { active = false }
-  }, [scan?.id, scan?.status, wait, update])
-}
-
 export function useActiveScan(scanId?: string) {
   const {
     scans,

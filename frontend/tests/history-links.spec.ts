@@ -72,21 +72,17 @@ async function mockHistory(page: Page) {
   return requests
 }
 
-// Known gap, kept visible rather than deleted. Opening a *running* scan by
-// direct link never refreshes: the store can wait on an event stream
-// (`sseWaitForScan`), but only the in-app start path uses it through
-// `useActiveScan`. `Results` and `Findings` read the record once and stay on the
-// running state, so a shared link to a scan in progress dead-ends until reload.
-// `test.fail()` keeps the assertion as documentation and turns this green only
-// while the gap exists; implementing the wait makes it an unexpected pass, which
-// is the signal to delete this annotation. Tracked as the slice after the
-// browser CI job.
-test.fail('an older running result reaches completion outside the recent list', async ({ page }) => {
+// One read reports the scan as running, and that is the only read the app makes
+// before the event stream answers: the backend commits the terminal row before
+// it queues the completion event, so a refetch after that event cannot see a
+// stale `running`. This case is pinned so a future reader does not re-add a
+// retry loop for a race the API cannot produce.
+test('an older running result reaches completion outside the recent list', async ({ page }) => {
   await mockHistory(page)
   let detailReads = 0
   await page.route('**/api/scans/1', (route) => {
     detailReads += 1
-    return route.fulfill({ json: detailReads <= 2 ? { ...oldestScan, status: 'running', summary: null } : oldestScan })
+    return route.fulfill({ json: detailReads <= 1 ? { ...oldestScan, status: 'running', summary: null } : oldestScan })
   })
   await page.route('**/api/scans/1/events', (route) => route.fulfill({
     contentType: 'text/event-stream',
@@ -94,6 +90,28 @@ test.fail('an older running result reaches completion outside the recent list', 
   }))
   await page.goto(`${BASE_URL}/results/1`)
   await expect(page.getByRole('row').filter({ hasText: 'sample-oldest-package' })).toBeVisible()
+})
+
+// The findings view used to read a running scan and then stop: findings are only
+// fetched for a completed scan, and nothing on that page waited for the terminal
+// state, so a link shared while the scan was still working stayed empty until a
+// manual reload. Both detail views now follow the same completion wait.
+test('a running scan opened on the findings page reaches completion too', async ({ page }) => {
+  await mockHistory(page)
+  let detailReads = 0
+  await page.route('**/api/scans/1', (route) => {
+    detailReads += 1
+    return route.fulfill({ json: detailReads <= 1 ? { ...oldestScan, status: 'running', summary: null } : oldestScan })
+  })
+  await page.route('**/api/scans/1/events', (route) => route.fulfill({
+    contentType: 'text/event-stream',
+    body: 'event: completed\ndata: {"type":"completed"}\n\n',
+  }))
+  await page.goto(`${BASE_URL}/findings/1`)
+  // Findings render as cards, not table rows, so the assertion names the matched
+  // package and the catalogue entry that produced it.
+  await expect(page.getByText('sample-oldest-package@1.2.3')).toBeVisible()
+  await expect(page.getByText('SAMPLE-001', { exact: false })).toBeVisible()
 })
 
 for (const view of ['results', 'findings'] as const) {
