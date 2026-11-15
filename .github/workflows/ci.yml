@@ -95,6 +95,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: Unit tests (src/lib)
         run: npm run test
+      - name: Type-check build configs
+        run: npm run typecheck:config
       - name: Type-check + build
         run: npm run build
 
