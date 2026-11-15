@@ -256,9 +256,9 @@ def test_calculate_summary_carries_coverage():
     assert summary.findings_count == 1
 
 
-def test_calculate_summary_without_coverage_defaults():
+def test_calculate_summary_without_coverage_is_unknown():
     summary = scanner.calculate_summary([], [])
-    assert summary.timed_out is False
+    assert summary.timed_out is None
     assert summary.duration_ms is None
     assert summary.files_considered is None
 

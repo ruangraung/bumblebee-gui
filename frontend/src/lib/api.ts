@@ -12,7 +12,7 @@ export interface ScanSummary {
   ecosystems_found: number
   findings_count: number
   ecosystem_counts: Record<string, number>
-  timed_out?: boolean
+  timed_out?: boolean | null
   duration_ms?: number
   files_considered?: number
 }

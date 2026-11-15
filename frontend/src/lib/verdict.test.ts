@@ -13,6 +13,8 @@ function scan(overrides: Partial<ScanRecord> = {}): ScanRecord {
       ecosystems_found: 2,
       findings_count: 0,
       ecosystem_counts: { npm: 544 },
+      // The backend always reports coverage once it can speak for it.
+      timed_out: false,
     },
     ...overrides,
   };
@@ -25,6 +27,7 @@ function withFindings(findingsCount: number): ScanRecord {
       ecosystems_found: 2,
       findings_count: findingsCount,
       ecosystem_counts: { npm: 544 },
+      timed_out: false,
     },
   });
 }
@@ -117,4 +120,21 @@ describe("scanVerdict", () => {
       expect(result?.note).toBe(c.note);
     });
   }
+});
+
+it("gives no verdict when coverage was never reported", () => {
+  const unreported = {
+    id: 9,
+    timestamp: "2026-11-16T02:00:00.000Z",
+    profile: "baseline",
+    status: "completed",
+    summary: {
+      total_packages: 12,
+      ecosystems_found: 1,
+      findings_count: 0,
+      ecosystem_counts: {},
+      timed_out: null,
+    },
+  } as ScanRecord;
+  expect(scanVerdict(unreported)).toBeNull();
 });

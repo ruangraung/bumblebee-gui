@@ -26,6 +26,11 @@ export function scanVerdict(scan: ScanRecord | null): ScanVerdict | null {
 
   const matched = summary.findings_count
 
+  // No scan_summary record reached the row: the scanner exited before it could
+  // summarise. Coverage is unknown, so no verdict is claimed at all — the
+  // clean verdict would read as "this tree was fully walked".
+  if (summary.timed_out == null) return null
+
   if (summary.timed_out === true) {
     return {
       matched,

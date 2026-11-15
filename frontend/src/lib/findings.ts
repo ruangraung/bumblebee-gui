@@ -85,7 +85,14 @@ export function findingsFilename(scanId: number | undefined, extension: 'json' |
 // a scan that matched nothing: one still running, one that failed, and one that
 // stopped at its time limit with part of the tree never visited. The results
 // page already tells those apart; the findings page did not.
-export type FindingsEmptyKind = 'none' | 'no-scans' | 'running' | 'failed' | 'partial' | 'no-findings'
+export type FindingsEmptyKind =
+  | 'none'
+  | 'no-scans'
+  | 'running'
+  | 'failed'
+  | 'partial'
+  | 'unknown-coverage'
+  | 'no-findings'
 
 export interface FindingsEmptyInput {
   loading: boolean
@@ -117,7 +124,10 @@ function unfinishedKind(status: string): FindingsEmptyKind | null {
 // that matched nothing, or one cut short before it covered the tree.
 function emptyResultKind(scan: ScanRecord, findingsCount: number): FindingsEmptyKind {
   if (findingsCount > 0) return 'none'
-  return scan.summary?.timed_out === true ? 'partial' : 'no-findings'
+  if (scan.summary?.timed_out === true) return 'partial'
+  // The scanner never reported coverage for this scan: unknown, not full.
+  if (scan.summary === undefined || scan.summary.timed_out == null) return 'unknown-coverage'
+  return 'no-findings'
 }
 
 // One message per case, so a case cannot be added without one.
@@ -127,5 +137,7 @@ export const FINDINGS_EMPTY_MESSAGES: Record<Exclude<FindingsEmptyKind, 'none'>,
   failed: 'This scan failed, so nothing was compared.',
   partial:
     'This scan stopped at its time limit, so packages it never reached are not covered here.',
+  'unknown-coverage':
+    'This scan never reported how much of the tree it covered, so packages it did not walk cannot be ruled out here.',
   'no-findings': 'No exposure matches were found in this scan.',
 }

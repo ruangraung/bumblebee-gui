@@ -93,6 +93,8 @@ describe("findingsEmptyKind", () => {
         ecosystems_found: 2,
         findings_count: findingsCount,
         ecosystem_counts: { npm: 740, pypi: 40 },
+        // The API always carries coverage once the backend can speak for it.
+        timed_out: false,
       },
     });
   }
@@ -175,5 +177,47 @@ describe("findingsEmptyKind", () => {
     expect(
       findingsEmptyKind({ loading: false, scans: [scan()], activeScan: null, findingsCount: 0 }),
     ).toBe("none");
+  });
+});
+
+describe("findingsEmptyKind with unknown coverage", () => {
+  function unreportedScan(summary: Record<string, unknown> | undefined): ScanRecord {
+    return {
+      id: 77,
+      timestamp: "2026-11-16T02:00:00.000Z",
+      profile: "baseline",
+      status: "completed",
+      summary: summary as never,
+    };
+  }
+
+  it("does not claim a clean scan when the summary object is missing", () => {
+    const unreported = unreportedScan(undefined);
+    expect(
+      findingsEmptyKind({
+        loading: false,
+        scans: [unreported],
+        activeScan: unreported,
+        findingsCount: 0,
+      }),
+    ).toBe("unknown-coverage");
+  });
+
+  it("does not claim a clean scan when coverage was never reported", () => {
+    const unreported = unreportedScan({
+      total_packages: 0,
+      ecosystems_found: 0,
+      findings_count: 0,
+      ecosystem_counts: {},
+      timed_out: null,
+    });
+    expect(
+      findingsEmptyKind({
+        loading: false,
+        scans: [unreported],
+        activeScan: unreported,
+        findingsCount: 0,
+      }),
+    ).toBe("unknown-coverage");
   });
 });
