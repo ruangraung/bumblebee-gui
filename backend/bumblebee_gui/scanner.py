@@ -269,7 +269,12 @@ async def cli_info() -> ScannerInfo:
     except FileNotFoundError:
         return ScannerInfo(error=f"No scanner binary at {BINARY_PATH}.")
     except asyncio.TimeoutError:
+        # Subclass of OSError, so this clause stays ahead of it.
         return ScannerInfo(error="The scanner did not answer its version check in time.")
+    except OSError as error:
+        # A binary without its exec bit, or an unwritable temp dir: the same
+        # "the tool is not usable" answer, not a 500.
+        return ScannerInfo(error=f"The scanner binary could not be run: {error}.")
     if returncode != 0:
         reason = cli_error_message(stderr.decode())
         return ScannerInfo(error=reason or f"The scanner exited with status {returncode}.")
