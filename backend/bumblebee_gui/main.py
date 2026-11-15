@@ -17,7 +17,7 @@ from .api_helpers import (
     require_scan,
     require_scan_data,
 )
-from .catalogue import catalogue_summary
+from .catalogue import catalogue_summary, problem_for_catalogue
 from .database import (
     delete_scan,
     fail_stale_running_scans,
@@ -342,6 +342,9 @@ async def create_scan(request: ScanRequest):
     duration_problem = problem_for_duration(request.max_duration)
     if duration_problem:
         problems.append(duration_problem)
+    catalogue_problem = problem_for_catalogue(request.exposure_catalog)
+    if catalogue_problem:
+        problems.append(catalogue_problem)
     if problems:
         raise HTTPException(status_code=422, detail="\n".join(problems))
 
