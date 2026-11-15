@@ -242,3 +242,10 @@ describe("exportFilename", () => {
     expect(exportFilename(undefined, "json")).toBe("packages-latest.json");
   });
 });
+
+it("flattens tabs and newlines inside a TSV cell to spaces", () => {
+  const tsv = packagesToTSV([pkg({ package_name: "left\tvalue\nhere" })]);
+  // One row, six columns, no stray delimiter anywhere.
+  expect(tsv.split("\t")).toHaveLength(6);
+  expect(tsv).toBe("left value here\tnpm\t1.0.0\tlockfile\t/app\thigh");
+});

@@ -32,9 +32,16 @@ export function packagesToCSV(packages: PackageRecord[]): string {
   return buildCSV(EXPORT_COLUMNS, packages.map(exportFields))
 }
 
+// A TSV cell cannot carry the delimiters the paste depends on: a tab splits
+// the cell and a newline splits the row. Real package data has neither, so a
+// stray one is flattened to a space and the paste stays columnar.
+function tsvCell(value: string): string {
+  return sanitizeCell(value.replace(/[\t\r\n]+/g, ' '))
+}
+
 // Clipboard format: no header, tab-separated, so a paste lands as columns.
 export function packagesToTSV(packages: PackageRecord[]): string {
-  return packages.map((pkg) => exportFields(pkg).map(sanitizeCell).join('\t')).join('\n')
+  return packages.map((pkg) => exportFields(pkg).map(tsvCell).join('\t')).join('\n')
 }
 
 export function getEcosystems(packages: PackageRecord[]): string[] {
