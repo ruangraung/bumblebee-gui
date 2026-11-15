@@ -246,6 +246,14 @@ async def scanner_info() -> ScannerInfo:
     return await cli_info()
 
 
+# Concurrent scans are bounded: each running scan holds a child process and
+# grows memory with its output, and every list request re-reads running output.
+# Four is far above what one operator starts by hand and far below what hurts.
+# A fifth submit queues until a slot frees; it is accepted and simply starts
+# later.
+_scan_slots = asyncio.Semaphore(4)
+
+
 async def _run_scan_background(
     scan_id: int, request: ScanRequest, ndjson_path: Path
 ) -> None:
@@ -259,6 +267,7 @@ async def _run_scan_background(
     def on_progress(count: int) -> None:
         _subscribers.publish(scan_id, {"type": "progress", "packages_found": count})
 
+    await _scan_slots.acquire()
     try:
         summary, _ = await run_scan(request, ndjson_path, on_progress=on_progress)
         await update_scan_status(
@@ -290,6 +299,8 @@ async def _run_scan_background(
         logger.exception("Scan %s failed: %s", scan_id, reason)
         await record_scan_failure(scan_id, reason)
         _subscribers.publish(scan_id, {"type": "failed", "error": reason})
+    finally:
+        _scan_slots.release()
 
 
 async def _insert_running_scan(request: ScanRequest, ndjson_path: Path) -> int:
