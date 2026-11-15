@@ -43,6 +43,7 @@ from .models import (
     ScanStatus,
 )
 from .roots import HOST_MOUNT, host_mount_report, inside_mount, root_problems
+from .scan_events import TERMINAL_TYPES, ScanSubscribers
 from .scanner import (
     THREAT_INTEL_DIR,
     cli_info,
@@ -60,15 +61,17 @@ logger = logging.getLogger("bumblebee_gui")
 # be cancelled by id when a running scan is deleted.
 _background_tasks: dict[int, asyncio.Task] = {}
 
-# Per-scan event queues for Server-Sent Events: each running scan pushes
-# progress/terminal events here; the SSE endpoint drains the queue live.
-_scan_queues: dict[int, asyncio.Queue] = {}
+# Open Server-Sent Event streams per scan. Every stream gets its own bounded
+# queue: one queue drained by every subscriber distributed each event to exactly
+# one of them, which left a second tab waiting for the fifteen second database
+# check to learn the scan had finished.
+_subscribers = ScanSubscribers()
 
 
 def _cleanup_scan(scan_id: int) -> None:
-    """Drop the task and queue registries when a scan task finishes."""
+    """Drop the task registry and any routing left for a finished scan."""
     _background_tasks.pop(scan_id, None)
-    _scan_queues.pop(scan_id, None)
+    _subscribers.close(scan_id)
 
 
 async def _cancel_running_scan(scan_id: int) -> None:
@@ -80,7 +83,6 @@ async def _cancel_running_scan(scan_id: int) -> None:
     so no zombie scan keeps running after the record is gone.
     """
     task = _background_tasks.get(scan_id)
-    queue = _scan_queues.get(scan_id)
 
     if task and not task.done():
         task.cancel()
@@ -89,9 +91,8 @@ async def _cancel_running_scan(scan_id: int) -> None:
         except (asyncio.CancelledError, asyncio.TimeoutError):
             pass
 
-    # Notify any SSE subscribers that the scan is gone (record removed later).
-    if queue:
-        queue.put_nowait({"type": "cancelled"})
+    # Notify every SSE subscriber that the scan is gone (record removed later).
+    _subscribers.close(scan_id, {"type": "cancelled"})
 
 
 async def _drain_background_tasks(timeout: float = 5.0) -> None:
@@ -188,16 +189,17 @@ async def scanner_info() -> ScannerInfo:
 
 
 async def _run_scan_background(
-    scan_id: int, request: ScanRequest, ndjson_path: Path, queue: asyncio.Queue
+    scan_id: int, request: ScanRequest, ndjson_path: Path
 ) -> None:
     """Execute a scan and update its record; runs detached from any request.
 
-    Progress is forwarded to the scan's SSE queue (throttled by ``run_scan``),
-    and a terminal event is pushed so subscribers close cleanly.
+    Progress is published to every open stream for this scan (throttled by
+    ``run_scan``), and a terminal event is published so subscribers close
+    cleanly.
     """
 
     def on_progress(count: int) -> None:
-        queue.put_nowait({"type": "progress", "packages_found": count})
+        _subscribers.publish(scan_id, {"type": "progress", "packages_found": count})
 
     try:
         summary, _ = await run_scan(request, ndjson_path, on_progress=on_progress)
@@ -207,15 +209,15 @@ async def _run_scan_background(
             summary=summary,
             ndjson_path=str(ndjson_path),
         )
-        queue.put_nowait(
-            {"type": "completed", "summary": summary.model_dump(mode="json")}
+        _subscribers.publish(
+            scan_id, {"type": "completed", "summary": summary.model_dump(mode="json")}
         )
     except Exception as exc:
         # The scanner's own words, kept: a failed scan has to explain itself.
         reason = cli_error_message(str(exc)) or type(exc).__name__
         logger.exception("Scan %s failed: %s", scan_id, reason)
         await record_scan_failure(scan_id, reason)
-        queue.put_nowait({"type": "failed", "error": reason})
+        _subscribers.publish(scan_id, {"type": "failed", "error": reason})
 
 
 async def _insert_running_scan(request: ScanRequest, ndjson_path: Path) -> int:
@@ -273,11 +275,7 @@ async def create_scan(request: ScanRequest):
     scan, ndjson_path = await _prepare_scan(request)
     scan_id = scan.id
 
-    queue: asyncio.Queue = asyncio.Queue()
-    _scan_queues[scan_id] = queue
-    task = asyncio.create_task(
-        _run_scan_background(scan_id, request, ndjson_path, queue)
-    )
+    task = asyncio.create_task(_run_scan_background(scan_id, request, ndjson_path))
     _background_tasks[scan_id] = task
     task.add_done_callback(lambda _t, sid=scan_id: _cleanup_scan(sid))
 
@@ -337,7 +335,9 @@ async def scan_events(scan_id: int):
     closes the stream.
     """
     scan = await get_scan_detail(scan_id)  # 404s for unknown scans
-    queue = _scan_queues.get(scan_id)
+    # Subscribe before the stream starts, so progress published while the
+    # response is being set up is buffered rather than missed.
+    queue = None if scan.status in (ScanStatus.completed, ScanStatus.failed) else _subscribers.subscribe(scan_id)
 
     async def event_stream():
         snapshot = {
@@ -346,35 +346,34 @@ async def scan_events(scan_id: int):
             "packages_found": scan.packages_found,
         }
         # Already finished: replay snapshot + terminal event and close.
-        if scan.status in (ScanStatus.completed, ScanStatus.failed):
+        if queue is None:
             yield _sse_event(snapshot)
             yield _sse_event(_terminal_event(scan))
             return
 
-        yield _sse_event(snapshot)
+        try:
+            yield _sse_event(snapshot)
 
-        if queue is None:  # unreachable for a running scan; defensive only
-            yield _sse_event({"type": "failed", "error": "event stream unavailable"})
-            return
-
-        while True:
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=15)
-            except asyncio.TimeoutError:
-                yield ": ping\n\n"
-                # Safety net: the scan may have reached a terminal state without
-                # a queued event (e.g. deleted by another client).
-                current = await get_scan(scan_id)
-                if current is None:
-                    yield _sse_event({"type": "cancelled"})
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+                    # Safety net: the scan may have reached a terminal state
+                    # without a queued event (e.g. deleted by another client).
+                    current = await get_scan(scan_id)
+                    if current is None:
+                        yield _sse_event({"type": "cancelled"})
+                        return
+                    if current.status in (ScanStatus.completed, ScanStatus.failed):
+                        yield _sse_event(_terminal_event(current))
+                        return
+                    continue
+                yield _sse_event(event)
+                if event.get("type") in TERMINAL_TYPES:
                     return
-                if current.status in (ScanStatus.completed, ScanStatus.failed):
-                    yield _sse_event(_terminal_event(current))
-                    return
-                continue
-            yield _sse_event(event)
-            if event.get("type") in ("completed", "failed", "cancelled"):
-                return
+        finally:
+            _subscribers.unsubscribe(scan_id, queue)
 
     return StreamingResponse(
         event_stream(),

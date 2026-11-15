@@ -334,10 +334,18 @@ def _sse_data(body: str) -> list[dict]:
 
 
 def test_scan_events_streams_live_progress_and_completion(client, monkeypatch, tmp_path):
-    """A live SSE subscriber receives snapshot → progress → completed."""
+    """A live SSE subscriber receives snapshot → progress → completed.
+
+    The progress calls wait for `connected`, because events published before a
+    stream exists are not buffered for it: a broadcast reaches open streams, and
+    a late joiner learns the current count from the snapshot instead.
+    """
+    connected = tmp_path / "connected"
     release = tmp_path / "release"
 
     async def streaming_run_scan(request, ndjson_path, on_progress=None):
+        while not connected.exists():
+            await asyncio.sleep(0.01)
         if on_progress:
             on_progress(1)
             on_progress(2)
@@ -361,7 +369,13 @@ def test_scan_events_streams_live_progress_and_completion(client, monkeypatch, t
     # we assert on the full body rather than incrementally reading lines (which
     # deadlocks with the TestClient's buffered streaming transport).
     threading.Thread(
-        target=lambda: (time.sleep(0.5), release.touch()), daemon=True
+        target=lambda: (
+            time.sleep(0.3),
+            connected.touch(),
+            time.sleep(0.3),
+            release.touch(),
+        ),
+        daemon=True,
     ).start()
 
     with client.stream("GET", f"/api/scans/{scan_id}/events") as r:
@@ -394,9 +408,12 @@ def test_scan_events_replays_terminal_state_for_finished_scan(client):
 
 def test_scan_events_deliver_progress_payload(client, monkeypatch, tmp_path):
     """Progress events carry the running package count as a JSON payload."""
+    connected = tmp_path / "connected"
     release = tmp_path / "release"
 
     async def counting_run_scan(request, ndjson_path, on_progress=None):
+        while not connected.exists():
+            await asyncio.sleep(0.01)
         if on_progress:
             on_progress(7)
         while not release.exists():
@@ -415,7 +432,13 @@ def test_scan_events_deliver_progress_payload(client, monkeypatch, tmp_path):
 
     scan_id = client.post("/api/scans", json={"profile": "baseline"}).json()["id"]
     threading.Thread(
-        target=lambda: (time.sleep(0.5), release.touch()), daemon=True
+        target=lambda: (
+            time.sleep(0.3),
+            connected.touch(),
+            time.sleep(0.3),
+            release.touch(),
+        ),
+        daemon=True,
     ).start()
 
     with client.stream("GET", f"/api/scans/{scan_id}/events") as r:
