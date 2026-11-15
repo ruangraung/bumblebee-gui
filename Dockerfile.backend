@@ -7,7 +7,7 @@
 # Building from a commit is the only way to ship a scanner that can read them.
 # The commit is asserted after checkout and git resolves a tree by content, so
 # the source is verified before it is compiled.
-FROM golang:1.25-bookworm AS scanner
+FROM golang:1.26-bookworm AS scanner
 
 ARG BUMBLEBEE_COMMIT=c1e83c0adb53a7f527b40a7181a690ad99a0a6e0
 
