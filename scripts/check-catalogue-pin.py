@@ -273,14 +273,16 @@ def coverage_problems(repo: str, pinned: str, digests: dict[str, str], token: st
     return problems
 
 
-def finish(args: argparse.Namespace, problems: list[str]) -> int:
+def finish(args: argparse.Namespace, problems: list[str], state: str) -> int:
     if problems:
         emit("verdict", "ACTION NEEDED")
         for problem in problems:
             detail(f"- {problem}")
         return EXIT_PROBLEM
     if args.skip_digests:
-        emit("verdict", "CURRENT: the pin is upstream's latest release (digests not checked)")
+        emit("verdict", "CURRENT: the pin is not behind a release (digests not checked)")
+    elif state == "ahead":
+        emit("verdict", "CURRENT: the pin is past upstream's latest release and verifies")
     else:
         emit("verdict", "CURRENT: the pin matches upstream's latest release and verifies")
     return EXIT_OK
@@ -308,7 +310,7 @@ def report(args: argparse.Namespace) -> int:
     if entries is not None:
         emit("entry count", f"{entries} entries across the listed catalogues")
 
-    return finish(args, problems)
+    return finish(args, problems, state)
 
 
 def main() -> int:

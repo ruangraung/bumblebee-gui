@@ -1,29 +1,35 @@
 # Dockerfile.backend
+
+# The scanner CLI, built from a pinned upstream commit.
+#
+# Upstream has published no release since v0.1.2 (2026-06-18), while the
+# catalogues it maintains moved to schema 0.2.0, which v0.1.2 refuses to load.
+# Building from a commit is the only way to ship a scanner that can read them.
+# The commit is asserted after checkout and git resolves a tree by content, so
+# the source is verified before it is compiled.
+FROM golang:1.25-bookworm AS scanner
+
+ARG BUMBLEBEE_COMMIT=c1e83c0adb53a7f527b40a7181a690ad99a0a6e0
+
+RUN git clone --quiet https://github.com/perplexityai/bumblebee /src \
+    && cd /src \
+    && git checkout --quiet --detach "${BUMBLEBEE_COMMIT}" \
+    && test "$(git rev-parse HEAD)" = "${BUMBLEBEE_COMMIT}" \
+    && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/bumblebee ./cmd/bumblebee
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (curl fetches the catalogues below)
 RUN apt-get update && apt-get install -y \
     curl \
-    tar \
     && rm -rf /var/lib/apt/lists/*
 
-# Download Bumblebee binary.
-#
-# The tag and the tarball's sha256 are both pinned. This downloads a scanner
-# that will then run against the filesystem, so the artifact is verified before
-# it is ever executed. The digest is the one published in the release's own
-# asset metadata (and repeated in its checksums.txt); curl -f so an error page
-# can never be saved in place of the tarball.
-ARG BUMBLEBEE_VERSION=0.1.2
-ARG BUMBLEBEE_SHA256=53b080cf3ddb692b0c4e5492ef4785b4c54daf1624fcd0fcba3958116a0be8d9
-RUN curl -fsSL "https://github.com/perplexityai/bumblebee/releases/download/v${BUMBLEBEE_VERSION}/bumblebee_${BUMBLEBEE_VERSION}_linux_amd64.tar.gz" \
-    -o /tmp/bumblebee.tar.gz \
-    && echo "${BUMBLEBEE_SHA256}  /tmp/bumblebee.tar.gz" | sha256sum -c - \
-    && tar -xzf /tmp/bumblebee.tar.gz -C /usr/local/bin/ \
-    && rm /tmp/bumblebee.tar.gz \
-    && chmod +x /usr/local/bin/bumblebee
+# The binary built above. It runs against the filesystem, so the image proves it
+# starts before anything else is layered on top.
+COPY --from=scanner /out/bumblebee /usr/local/bin/bumblebee
+RUN chmod +x /usr/local/bin/bumblebee && bumblebee version
 
 # Exposure catalogues.
 #
@@ -33,7 +39,7 @@ RUN curl -fsSL "https://github.com/perplexityai/bumblebee/releases/download/v${B
 # this data decides what gets reported as malicious: it is fetched at build
 # time rather than at run time, and verified before it is installed. It lives
 # outside /app, which the compose setup bind-mounts over during development.
-ARG BUMBLEBEE_THREAT_INTEL_COMMIT=cc57710eeaf685e7b89924a36c8583cad0a378fe
+ARG BUMBLEBEE_THREAT_INTEL_COMMIT=c1e83c0adb53a7f527b40a7181a690ad99a0a6e0
 COPY threat-intel.manifest /tmp/threat-intel.manifest
 RUN mkdir -p /opt/bumblebee/threat-intel \
     && cd /tmp \
@@ -43,9 +49,6 @@ RUN mkdir -p /opt/bumblebee/threat-intel \
     && sha256sum -c --strict /tmp/threat-intel.manifest \
     && cp /tmp/*.json /opt/bumblebee/threat-intel/ \
     && rm -f /tmp/*.json /tmp/threat-intel.manifest
-
-# Verify installation
-RUN bumblebee version
 
 # Install Python dependencies
 COPY backend/requirements.txt .
