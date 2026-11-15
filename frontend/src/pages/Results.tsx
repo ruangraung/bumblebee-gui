@@ -19,6 +19,12 @@ export default function Results() {
 
   const handleCancel = useCallback(async () => {
     if (!activeScan) return
+    // Cancel deletes the record, the same destructive act as clearing the
+    // whole history — so it gets the same confirmation.
+    const confirmed = window.confirm(
+      'Cancel this scan? Its record and the packages found so far are deleted.',
+    )
+    if (!confirmed) return
     await cancel()
     navigate('/')
   }, [activeScan, cancel, navigate])
