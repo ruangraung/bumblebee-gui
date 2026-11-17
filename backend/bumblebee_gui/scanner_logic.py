@@ -40,15 +40,17 @@ def record_type(record: dict) -> str:
 
 
 def decode_records(lines: Iterable[str]) -> Iterator[dict]:
-    """Decode NDJSON lines, skipping blank lines and malformed JSON."""
+    """Decode NDJSON lines, skipping blank lines, malformed JSON and non-objects."""
     for line in lines:
         text = line.strip()
         if not text:
             continue
         try:
-            yield json.loads(text)
+            value = json.loads(text)
         except json.JSONDecodeError:
             continue
+        if isinstance(value, dict):
+            yield value
 
 
 def decode_ndjson(text: str) -> Iterator[dict]:
@@ -57,11 +59,12 @@ def decode_ndjson(text: str) -> Iterator[dict]:
 
 
 def decode_line(line: bytes) -> Optional[dict]:
-    """Decode one raw output line, None when it is not valid JSON."""
+    """Decode one raw output line, None when it is not a JSON object."""
     try:
-        return json.loads(line)
+        value = json.loads(line)
     except json.JSONDecodeError:
         return None
+    return value if isinstance(value, dict) else None
 
 
 def records_by_type(records: Iterable[dict], kind: str) -> List[dict]:
