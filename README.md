@@ -222,7 +222,7 @@ Honest table, because a README that claims more than it has run is worse than a 
 
 | Path | Status |
 |---|---|
-| Linux with Docker Compose | **Verified.** Scans of a 780 package tree, catalogue matching against a compromised fixture, the full test suite and all five CI gates |
+| Linux with Docker Compose | **Verified.** Scans of a 780 package tree, catalogue matching against a compromised fixture, the full test suite and all six required checks |
 | macOS with Docker Compose | **Verified.** A fresh clone on macOS under OrbStack, mounting a home directory and scanning it. OrbStack has to be granted access to the mounted directory, or the mount reads as empty inside the container |
 | Windows | **No native path.** Upstream publishes no Windows build of the scanner. Docker Desktop runs the Linux container, so it may well work, but nothing has been checked there |
 | Native install without Docker | **Refused.** `install.sh` stops with a message and a non-zero exit. Native packaging, meaning a Python environment, the Node build, the scanner binary and the catalogue set, does not exist yet |
@@ -273,13 +273,19 @@ is where export encoding, filtering, sorting and date handling live.
 
 ### CI gates
 
-Every push and pull request runs five:
+Every push and pull request runs six required checks:
 
 1. **Socket** supply-chain scan
 2. **Gitleaks** secret scan
-3. **Dependency audits**, `pip-audit` and `npm audit`, both hard gates
+3. **Dependency audits**, `pip-audit` for the backend and `npm-audit` with an exception list for the frontend, both hard gates
 4. **Backend and frontend**: pytest, vitest, `tsc` and the production build
 5. **CodeScene Code Health**, which blocks hotspots from declining and new code from arriving unhealthy
+6. **Browser tests** (Playwright) against the built bundle
+
+An advisory that has no patched release and is disputed upstream cannot be cleared by an upgrade. Instead
+`frontend/audit-exceptions.json` names it once, with the packages it covers, the date it lapses and the
+evidence behind it, and `frontend/scripts/audit-gate.mjs` fails the build on anything else, on a report it
+cannot read, and on an exception whose date has passed. Each entry is meant to disappear again.
 
 ## Data storage
 
@@ -304,7 +310,7 @@ Scan data lives in `~/.bumblebee-gui/`, overridable with `BUMBLEBEE_DATA_DIR`:
   Host names it knows: localhost, 127.0.0.1, the compose proxy name, and whatever you add through
   `BUMBLEBEE_ALLOWED_HOSTS`. If you serve the API beyond loopback, add those host names and set
   `BUMBLEBEE_API_TOKEN` so every `/api` call carries the token.
-- **Five gates on every change**, listed above.
+- **Six required checks on every change**, listed above.
 
 ## Contributing
 
