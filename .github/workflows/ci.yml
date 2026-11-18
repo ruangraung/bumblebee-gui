@@ -132,6 +132,13 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          # A cache saved on a pull request branch is scoped to that branch, so
+          # an exact key alone only ever hits after a run on the same branch.
+          # The prefix reaches the entry a push to main saves, and an older
+          # browser is harmless: `playwright install` fetches whatever version
+          # the lockfile names and leaves a stale one unused.
+          restore-keys: |
+            playwright-${{ runner.os }}-
       - name: Install Playwright chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
