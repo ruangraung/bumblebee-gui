@@ -126,6 +126,12 @@ jobs:
       - name: Install frontend dependencies (locked)
         working-directory: frontend
         run: npm ci
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
       - name: Install Playwright chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
