@@ -91,8 +91,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install (locked)
         run: npm ci
-      - name: npm audit (CVE gate)
-        run: npm audit --audit-level=high
+      - name: Dependency audit (CVE gate)
+        run: |
+          node scripts/audit-gate.mjs --self-test
+          npm audit --json > audit-report.json || true
+          node scripts/audit-gate.mjs audit-report.json
       - name: Unit tests (src/lib)
         run: npm run test
       - name: Type-check build configs
@@ -103,8 +106,8 @@ jobs:
   # The Playwright suites existed for months without a runner, so they guarded
   # nothing. They run here against the built bundle served by `vite preview`,
   # with a real backend on 8001 driven by the scripted scanner in
-  # scripts/fake-scanner.sh. Deliberately not a required check yet: a browser
-  # suite that has only ever run on one machine has to prove itself first.
+  # scripts/fake-scanner.sh. The suite proved itself before it was made a
+  # required check; it is one of the six the main ruleset enforces.
   browser:
     name: Browser tests (Playwright)
     runs-on: ubuntu-latest

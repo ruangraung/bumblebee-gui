@@ -96,3 +96,6 @@ frontend/playwright-report/
 
 # TypeScript incremental build state (tsc -p tsconfig.node.json writes this)
 frontend/tsconfig.node.tsbuildinfo
+
+# npm audit report written by the CI gate (scripts/audit-gate.mjs)
+frontend/audit-report.json
