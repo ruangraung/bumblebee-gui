@@ -85,6 +85,16 @@ def parse_ndjson_output(output: str) -> tuple[List[dict], List[dict]]:
     return records_by_type(records, PACKAGE), records_by_type(records, FINDING)
 
 
+def records_present(text: str) -> bool:
+    """Whether the stream holds at least one decoded record.
+
+    An exit status of 0 says the CLI finished, not that it looked at anything: a
+    stream with no records is what a replaced or broken binary produces, while a
+    real scan of an empty tree still emits its scan_summary.
+    """
+    return any(decode_ndjson(text))
+
+
 def coverage_fields(text: str) -> dict:
     """Coverage facts from the CLI's scan_summary record, empty when absent.
 

@@ -29,6 +29,7 @@ from .scanner_logic import (
     parse_ndjson_output,
     read_records,
     record_type,
+    records_present,
     repeat_option,
     toggle_option,
     valued_option,
@@ -230,6 +231,10 @@ async def run_scan(
     # The CLI exits 0 even when it stopped at the time limit, so its own
     # coverage record is read from the same text.
     text = ndjson_path.read_text()
+    if not records_present(text):
+        raise RuntimeError(
+            "The scanner exited with status 0 but wrote no records."
+        )
     packages, findings = parse_ndjson_output(text)
     summary = calculate_summary(packages, findings, coverage_fields(text))
 
