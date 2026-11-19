@@ -305,7 +305,10 @@ async def _run_scan_background(
 
 async def _insert_running_scan(request: ScanRequest, ndjson_path: Path) -> int:
     """Recover the committed ID before rolling back a cancelled insertion."""
-    receipt = build_receipt(request, await cli_info())
+    # Building the receipt reads and hashes the named catalogue; keep that off
+    # the event loop so a large file cannot stall every other endpoint.
+    scanner_info = await cli_info()
+    receipt = await asyncio.to_thread(build_receipt, request, scanner_info)
     insertion = asyncio.create_task(
         insert_scan(
             profile=request.profile,
