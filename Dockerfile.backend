@@ -7,7 +7,7 @@
 # Building from a commit is the only way to ship a scanner that can read them.
 # The commit is asserted after checkout and git resolves a tree by content, so
 # the source is verified before it is compiled.
-FROM golang:1.26-bookworm AS scanner
+FROM golang:1.26-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0 AS scanner
 
 ARG BUMBLEBEE_COMMIT=c1e83c0adb53a7f527b40a7181a690ad99a0a6e0
 
@@ -17,7 +17,7 @@ RUN git clone --quiet https://github.com/perplexityai/bumblebee /src \
     && test "$(git rev-parse HEAD)" = "${BUMBLEBEE_COMMIT}" \
     && CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/bumblebee ./cmd/bumblebee
 
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
 
 WORKDIR /app
 
