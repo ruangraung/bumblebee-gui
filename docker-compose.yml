@@ -5,10 +5,7 @@ services:
       dockerfile: Dockerfile.backend
     ports:
       - "127.0.0.1:8001:8000"
-    # The image runs unprivileged without --reload; development adds it back.
-    command: ["uvicorn", "bumblebee_gui.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
-      - ./backend:/app
       - bumblebee-data:/home/bumblebee/.bumblebee-gui
     environment:
       - BUMBLEBEE_DATA_DIR=/home/bumblebee/.bumblebee-gui
@@ -19,22 +16,8 @@ services:
       dockerfile: Dockerfile.frontend
     ports:
       - "127.0.0.1:5173:5173"
-    volumes:
-      - ./frontend:/app
-      # The image installs its dependencies into /app/node_modules. Without a
-      # volume here, the source mount above hides them behind an empty
-      # directory on any machine that has not run npm install itself, and the
-      # dev server exits with "vite: not found".
-      - frontend-node-modules:/app/node_modules
-      # A build run inside the container writes dist/ as root, and vite empties
-      # that directory at the start of every build. The root-owned output then
-      # survives on the host and blocks any later build there with EACCES.
-      # Keeping dist/ in a volume holds container output out of the host tree.
-      - frontend-dist:/app/dist
     depends_on:
       - backend
 
 volumes:
   bumblebee-data:
-  frontend-node-modules:
-  frontend-dist:

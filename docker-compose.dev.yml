@@ -1,0 +1,29 @@
+# Development override: hot reload for both services, Vite dev server for the
+# frontend. The default compose file serves the built bundle through Caddy;
+# this opt-in override restores the source mounts and the dev server.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  backend:
+    command: ["uvicorn", "bumblebee_gui.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build:
+      target: dev
+    volumes:
+      - ./frontend:/app
+      # The image installs its dependencies into /app/node_modules. Without a
+      # volume here, the source mount above hides them behind an empty
+      # directory on any machine that has not run npm install itself, and the
+      # dev server exits with "vite: not found".
+      - frontend-node-modules:/app/node_modules
+      # A build run inside the container writes dist/ as root, and vite empties
+      # that directory at the start of every build. Keeping dist/ in a volume
+      # holds container output out of the host tree.
+      - frontend-dist:/app/dist
+
+volumes:
+  frontend-node-modules:
+  frontend-dist:

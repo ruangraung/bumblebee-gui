@@ -1,0 +1,15 @@
+:5173 {
+	root * /srv
+	encode gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000 {
+			header_up Host backend
+		}
+	}
+
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
