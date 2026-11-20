@@ -1,33 +1,26 @@
 # Dockerfile.frontend
-FROM node:22-slim
+#
+# The default (production) stage serves the built bundle through Caddy, a
+# memory-safe server, instead of the Vite dev server. Vite and Playwright stay
+# in the build and dev stages only, so neither is part of the shipped runtime.
 
+FROM node:22-slim AS build
 WORKDIR /app
-
-# Install system dependencies for Playwright
-RUN apt-get update && apt-get install -y \
-    wget \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install dependencies from the committed lockfile, the same set the CI
-# audit runs against
 COPY frontend/package*.json ./
 RUN npm ci
-
-# Install Playwright (inside container, not on host). The browsers land in a
-# shared path so the runtime user can execute them.
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN npx playwright install --with-deps chromium
-
-# Copy application code
 COPY frontend/ .
+RUN npm run build
 
-# The dev server and its cache write inside /app, so the tree belongs to the
-# user that runs it instead of root.
-RUN chown -R node:node /app
-
-USER node
-
+FROM node:22-slim AS dev
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ .
 EXPOSE 5173
-
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+
+FROM caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0 AS production
+COPY --from=build /app/dist /srv
+COPY frontend/Caddyfile /etc/caddy/Caddyfile
+EXPOSE 5173
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

@@ -12,6 +12,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "Dockerfile.backend"
 COMPOSE = REPO_ROOT / "docker-compose.yml"
+DEV_COMPOSE = REPO_ROOT / "docker-compose.dev.yml"
 
 
 def _dockerfile_cmd() -> str:
@@ -34,5 +35,10 @@ def test_image_runs_as_an_unprivileged_user():
 
 
 def test_dev_compose_keeps_hot_reload():
+    text = DEV_COMPOSE.read_text(encoding="utf-8")
+    assert "--reload" in text, "the dev override must add --reload back"
+
+
+def test_production_compose_has_no_reload():
     text = COMPOSE.read_text(encoding="utf-8")
-    assert "--reload" in text, "the dev compose must add --reload back"
+    assert "--reload" not in text
