@@ -66,6 +66,7 @@ async function mockHistory(page: Page, mode: Mode = 'success') {
     unmatched: [] as string[],
   }
   const about: Record<string, unknown> = {
+    '/api/session': { auth_required: false, authenticated: true },
     '/api/health': { status: 'ok', version: 'test' },
     '/api/scanner': { version: 'test', commit: null, error: null },
     '/api/exposure-catalog': { catalogues: 0, entries: 0, versions: 0, available: false },

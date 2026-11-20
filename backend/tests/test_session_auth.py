@@ -91,3 +91,21 @@ def test_session_probe_is_exempt_from_the_guard(client, monkeypatch):
     monkeypatch.setenv("BUMBLEBEE_API_TOKEN", "lab-secret")
     response = client.get("/api/session")
     assert response.status_code == 200
+
+
+def test_session_cookie_is_not_the_raw_token(client, monkeypatch):
+    monkeypatch.setenv("BUMBLEBEE_API_TOKEN", "lab-secret")
+    client.post("/api/session", headers={"X-Bumblebee-Token": "lab-secret"})
+    issued = client.cookies.get("bumblebee_session")
+    assert issued != "lab-secret"
+    assert len(issued) > 0
+
+
+def test_logout_revokes_the_session(client, monkeypatch):
+    monkeypatch.setenv("BUMBLEBEE_API_TOKEN", "lab-secret")
+    client.post("/api/session", headers={"X-Bumblebee-Token": "lab-secret"})
+    sid = client.cookies.get("bumblebee_session")
+    client.delete("/api/session")
+    client.cookies.set("bumblebee_session", sid)
+    response = client.get("/api/scans")
+    assert response.status_code == 401

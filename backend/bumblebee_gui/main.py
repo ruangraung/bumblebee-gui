@@ -3,6 +3,7 @@ import hmac
 import json
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -161,6 +162,17 @@ def _cookie_value(headers, name: str) -> bytes:
     return morsel.value.encode()
 
 
+# Valid session ids issued by /api/session. The cookie carries an opaque random
+# id, never the API token itself, so the credential is not stored in the browser.
+_sessions: set[str] = set()
+
+
+def _credentials_valid(header_value: str, sid: str, token: str) -> bool:
+    if hmac.compare_digest(header_value, token):
+        return True
+    return sid in _sessions
+
+
 class TokenMiddleware:
     """Require a shared token on /api and the docs when BUMBLEBEE_API_TOKEN is set.
 
@@ -195,10 +207,9 @@ class TokenMiddleware:
             token = os.environ.get("BUMBLEBEE_API_TOKEN")
             if token:
                 headers = {name: value for name, value in scope["headers"]}
-                provided = headers.get(self.header, b"")
-                if not provided:
-                    provided = _cookie_value(headers, "bumblebee_session")
-                if not hmac.compare_digest(provided, token.encode()):
+                header_value = headers.get(self.header, b"").decode("latin-1")
+                sid = _cookie_value(headers, "bumblebee_session").decode("latin-1")
+                if not _credentials_valid(header_value, sid, token):
                     response = JSONResponse(
                         {"detail": "missing or invalid API token"}, status_code=401
                     )
@@ -241,15 +252,14 @@ async def session_status(request: Request):
     token = os.environ.get("BUMBLEBEE_API_TOKEN")
     if not token:
         return {"auth_required": False, "authenticated": True}
-    provided = request.headers.get("x-bumblebee-token", "")
-    if not provided:
-        provided = request.cookies.get("bumblebee_session", "")
-    return {"auth_required": True, "authenticated": hmac.compare_digest(provided, token)}
+    header_value = request.headers.get("x-bumblebee-token", "")
+    sid = request.cookies.get("bumblebee_session", "")
+    authenticated = _credentials_valid(header_value, sid, token)
+    return {"auth_required": True, "authenticated": authenticated}
 
 
 @app.post("/api/session")
 async def create_session(
-    request: Request,
     response: Response,
     x_bumblebee_token: str = Header(default=""),
 ):
@@ -259,20 +269,22 @@ async def create_session(
         return {"status": "ok", "auth_required": False}
     if not hmac.compare_digest(x_bumblebee_token, token):
         raise HTTPException(status_code=401, detail="missing or invalid API token")
+    sid = secrets.token_urlsafe(32)
+    _sessions.add(sid)
     response.set_cookie(
         "bumblebee_session",
-        token,
+        sid,
         httponly=True,
         samesite="strict",
         path="/",
-        secure=request.url.scheme == "https",
     )
     return {"status": "ok", "auth_required": True}
 
 
 @app.delete("/api/session")
-async def end_session(response: Response):
-    """Clear the session cookie."""
+async def end_session(request: Request, response: Response):
+    """Clear the session cookie and revoke its server-side session."""
+    _sessions.discard(request.cookies.get("bumblebee_session", ""))
     response.delete_cookie("bumblebee_session", path="/")
     return {"status": "ok"}
 
