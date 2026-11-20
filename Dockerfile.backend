@@ -50,9 +50,10 @@ RUN mkdir -p /opt/bumblebee/threat-intel \
     && cp /tmp/*.json /opt/bumblebee/threat-intel/ \
     && rm -f /tmp/*.json /tmp/threat-intel.manifest
 
-# Install Python dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies from the hashed lock so every transitive
+# package is pinned and verified before it is installed.
+COPY backend/requirements.lock .
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # Copy application code
 COPY backend/ .
