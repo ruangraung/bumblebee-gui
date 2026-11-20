@@ -3,10 +3,12 @@ import hmac
 import json
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
+from http.cookies import SimpleCookie
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -149,12 +151,36 @@ app.add_middleware(
 )
 
 
+def _cookie_value(headers, name: str) -> bytes:
+    """Read one cookie value from the raw ASGI headers."""
+    raw = headers.get(b"cookie", b"").decode("latin-1")
+    jar = SimpleCookie()
+    jar.load(raw)
+    morsel = jar.get(name)
+    if morsel is None:
+        return b""
+    return morsel.value.encode()
+
+
+# Valid session ids issued by /api/session. The cookie carries an opaque random
+# id, never the API token itself, so the credential is not stored in the browser.
+_sessions: set[str] = set()
+
+
+def _credentials_valid(header_value: str, sid: str, token: str) -> bool:
+    if hmac.compare_digest(header_value, token):
+        return True
+    return sid in _sessions
+
+
 class TokenMiddleware:
-    """Require a shared token on /api when BUMBLEBEE_API_TOKEN is set.
+    """Require a shared token on /api and the docs when BUMBLEBEE_API_TOKEN is set.
 
     Off by default: the documented install publishes the API on loopback only.
     Operators who serve it wider set the variable and restart. The value is
-    read per request so rotating it does not need a restart either.
+    read per request so rotating it does not need a restart either. A caller
+    authenticates with the token header or with the session cookie issued by
+    /api/session; the cookie lets the browser's EventSource authenticate too.
     """
 
     def __init__(self, app, header: bytes = b"x-bumblebee-token"):
@@ -162,17 +188,28 @@ class TokenMiddleware:
         self.header = header
 
     def _token_required(self, scope) -> bool:
-        if scope["type"] != "http" or scope["method"] == "OPTIONS":
+        if scope["type"] != "http":
             return False
-        return scope["path"].startswith("/api/")
+        if scope["method"] == "OPTIONS":
+            return False
+        path = scope["path"]
+        if path == "/api/session":
+            return False
+        return self._guarded(path)
+
+    def _guarded(self, path) -> bool:
+        if path.startswith("/api/"):
+            return True
+        return path in ("/docs", "/redoc", "/openapi.json")
 
     async def __call__(self, scope, receive, send):
         if self._token_required(scope):
             token = os.environ.get("BUMBLEBEE_API_TOKEN")
             if token:
                 headers = {name: value for name, value in scope["headers"]}
-                provided = headers.get(self.header, b"")
-                if not hmac.compare_digest(provided, token.encode()):
+                header_value = headers.get(self.header, b"").decode("latin-1")
+                sid = _cookie_value(headers, "bumblebee_session").decode("latin-1")
+                if not _credentials_valid(header_value, sid, token):
                     response = JSONResponse(
                         {"detail": "missing or invalid API token"}, status_code=401
                     )
@@ -207,6 +244,49 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "ok", "version": "0.1.0"}
+
+
+@app.get("/api/session")
+async def session_status(request: Request):
+    """Whether auth is required and whether this caller is authenticated."""
+    token = os.environ.get("BUMBLEBEE_API_TOKEN")
+    if not token:
+        return {"auth_required": False, "authenticated": True}
+    header_value = request.headers.get("x-bumblebee-token", "")
+    sid = request.cookies.get("bumblebee_session", "")
+    authenticated = _credentials_valid(header_value, sid, token)
+    return {"auth_required": True, "authenticated": authenticated}
+
+
+@app.post("/api/session")
+async def create_session(
+    response: Response,
+    x_bumblebee_token: str = Header(default=""),
+):
+    """Exchange the API token for an HttpOnly session cookie."""
+    token = os.environ.get("BUMBLEBEE_API_TOKEN")
+    if not token:
+        return {"status": "ok", "auth_required": False}
+    if not hmac.compare_digest(x_bumblebee_token, token):
+        raise HTTPException(status_code=401, detail="missing or invalid API token")
+    sid = secrets.token_urlsafe(32)
+    _sessions.add(sid)
+    response.set_cookie(
+        "bumblebee_session",
+        sid,
+        httponly=True,
+        samesite="strict",
+        path="/",
+    )
+    return {"status": "ok", "auth_required": True}
+
+
+@app.delete("/api/session")
+async def end_session(request: Request, response: Response):
+    """Clear the session cookie and revoke its server-side session."""
+    _sessions.discard(request.cookies.get("bumblebee_session", ""))
+    response.delete_cookie("bumblebee_session", path="/")
+    return {"status": "ok"}
 
 
 @app.get("/api/host-directories", response_model=HostMountReport)

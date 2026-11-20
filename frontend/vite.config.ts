@@ -49,7 +49,7 @@ export default defineConfig({
   },
   // The browser specs load the built bundle through `vite preview`, never the
   // dev server and never the compose stack (that one serves `dist` through
-  // nginx). Preview therefore needs its own port and proxy, aimed at a backend
+  // Caddy). Preview therefore needs its own port and proxy, aimed at a backend
   // started on the same host. Port 8001 keeps it clear of the compose service on
   // 8000, and `strictPort` makes a busy 5173 a hard failure instead of a silent
   // bump that would leave the specs pointed at nothing.
