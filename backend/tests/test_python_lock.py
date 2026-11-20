@@ -31,11 +31,19 @@ def _lock_requirements() -> list[str]:
     return lines
 
 
+def _is_requirement_line(line: str) -> bool:
+    if not line:
+        return False
+    if line.startswith("#"):
+        return False
+    return not line.startswith("-r")
+
+
 def _direct_requirement_names() -> set[str]:
     names = set()
     for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("-r"):
+        if not _is_requirement_line(line):
             continue
         match = re.match(r"^([A-Za-z0-9_.-]+)", line)
         if match:
