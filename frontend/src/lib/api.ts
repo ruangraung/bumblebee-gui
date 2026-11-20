@@ -103,6 +103,11 @@ export interface ScanEvent {
   error?: string
 }
 
+export interface SessionStatus {
+  auth_required: boolean
+  authenticated: boolean
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
@@ -123,6 +128,21 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   async health(): Promise<{ status: string; version: string }> {
     return request('/api/health')
+  },
+
+  async sessionStatus(): Promise<SessionStatus> {
+    return request('/api/session')
+  },
+
+  async login(token: string): Promise<{ status: string }> {
+    return request('/api/session', {
+      method: 'POST',
+      headers: { 'X-Bumblebee-Token': token },
+    })
+  },
+
+  async logout(): Promise<void> {
+    await request('/api/session', { method: 'DELETE' })
   },
 
   async createScan(scanRequest: ScanRequest): Promise<ScanRecord> {
