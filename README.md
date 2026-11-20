@@ -33,8 +33,8 @@ cd bumblebee-gui
 docker compose up -d
 ```
 
-Then open <http://localhost:5173>. The API listens on <http://localhost:8001> and documents itself at
-<http://localhost:8001/docs>.
+Then open <http://localhost:5173>. Caddy serves the built frontend there and proxies `/api` to the backend,
+which listens on <http://localhost:8001> and documents itself at <http://localhost:8001/docs>.
 
 Both ports are bound to loopback, so nothing is reachable from another machine by default. If either port is
 already taken, compose fails with `Bind for 127.0.0.1:5173 failed: port is already allocated` before the
@@ -145,16 +145,18 @@ compromised. No real environment appears in them.
 
 ```mermaid
 flowchart LR
-  U[Browser] -->|REST + SSE| A[FastAPI backend]
+  U[Browser] -->|REST + SSE| W[Caddy:<br/>built frontend + /api proxy]
+  W -->|/api| A[FastAPI backend]
   A -->|spawns, NDJSON streamed to disk| C[Bumblebee CLI]
   C -->|reads package metadata| F[(Filesystem:<br/>container plus read-only /host)]
   C -->|compares against| T[(Bundled threat-intel)]
-  A --> D[(SQLite in ~/.bumblebee-gui)]
+  A --> D[(SQLite in the data volume)]
 ```
 
-Three processes, and the boundaries between them are the interesting part. The browser never talks to the
-scanner; the backend never parses package metadata itself. The CLI does the walking and emits NDJSON, the
-backend turns that into records and serves them, and the browser renders what it is given.
+Caddy serves the built frontend and proxies `/api` to the backend, and the boundaries between the processes
+are the interesting part. The browser never talks to the scanner; the backend never parses package metadata
+itself. The CLI does the walking and emits NDJSON, the backend turns that into records and serves them, and
+the browser renders what it is given.
 
 ## Scan lifecycle
 
@@ -235,14 +237,24 @@ Prerequisites: Python 3.11+, Node 22+, Docker (recommended).
 
 ### With Docker
 
+The default stack is the production one: Caddy serves the built frontend, and the backend runs the code baked
+into the image as an unprivileged user, without the autoreloader.
+
 ```bash
 docker compose up -d
 docker compose logs -f
 docker compose down
 ```
 
-Dependencies for the frontend are installed inside the image, so there is nothing to run on the host. Edits
-under `frontend/src` and `backend/bumblebee_gui` reload on their own.
+For development with hot reload, add the dev override. It mounts the source trees and runs the Vite dev server
+and the backend autoreloader:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+Dependencies for the frontend are installed inside the image, so there is nothing to run on the host. With the
+dev override, edits under `frontend/src` and `backend/bumblebee_gui` reload on their own.
 
 ### Without Docker
 
@@ -268,8 +280,9 @@ cd frontend && npm run test && npm run build
 ```
 
 The backend suite covers command building, NDJSON parsing, record mapping, the subprocess streaming and
-cancellation path, and the async scan lifecycle. The frontend suite covers the pure logic in `src/lib`, which
-is where export encoding, filtering, sorting and date handling live.
+cancellation path, the async scan lifecycle, and the session-cookie auth and docs guard. The frontend suite
+covers the pure logic in `src/lib` (export encoding, filtering, sorting and date handling) and, under jsdom,
+the auth store and the sign-in gate.
 
 ### CI gates
 
@@ -289,7 +302,9 @@ cannot read, and on an exception whose date has passed. Each entry is meant to d
 
 ## Data storage
 
-Scan data lives in `~/.bumblebee-gui/`, overridable with `BUMBLEBEE_DATA_DIR`:
+Scan data lives in `~/.bumblebee-gui/`, overridable with `BUMBLEBEE_DATA_DIR`. In the Docker stack the backend
+runs as the unprivileged `bumblebee` user, with the data in the `bumblebee-data` volume at
+`/home/bumblebee/.bumblebee-gui`:
 
 ```
 ~/.bumblebee-gui/
@@ -309,7 +324,11 @@ Scan data lives in `~/.bumblebee-gui/`, overridable with `BUMBLEBEE_DATA_DIR`:
   lives in, so requested roots are not confined to the host mount. The API answers only to the
   Host names it knows: localhost, 127.0.0.1, the compose proxy name, and whatever you add through
   `BUMBLEBEE_ALLOWED_HOSTS`. If you serve the API beyond loopback, add those host names and set
-  `BUMBLEBEE_API_TOKEN` so every `/api` call carries the token.
+  `BUMBLEBEE_API_TOKEN`. The UI then asks for the token once and exchanges it for an HttpOnly session cookie
+  that authenticates later calls, including the live-progress stream; the same token guards `/docs`, `/redoc`
+  and `/openapi.json`.
+- **Unprivileged runtime.** The backend container runs as a non-root user, and the default stack serves the
+  built frontend through Caddy rather than a development server.
 - **Six required checks on every change**, listed above.
 
 ## Contributing
