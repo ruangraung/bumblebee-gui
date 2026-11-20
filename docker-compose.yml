@@ -5,11 +5,13 @@ services:
       dockerfile: Dockerfile.backend
     ports:
       - "127.0.0.1:8001:8000"
+    # The image runs unprivileged without --reload; development adds it back.
+    command: ["uvicorn", "bumblebee_gui.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./backend:/app
-      - bumblebee-data:/root/.bumblebee-gui
+      - bumblebee-data:/home/bumblebee/.bumblebee-gui
     environment:
-      - BUMBLEBEE_DATA_DIR=/root/.bumblebee-gui
+      - BUMBLEBEE_DATA_DIR=/home/bumblebee/.bumblebee-gui
 
   frontend:
     build:
