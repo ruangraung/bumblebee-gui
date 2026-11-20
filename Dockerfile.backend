@@ -58,9 +58,14 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 # Copy application code
 COPY backend/ .
 
-# Create data directory
-RUN mkdir -p /root/.bumblebee-gui/scans
+# Run unprivileged: a dedicated user owns the data directory, and the runtime
+# command carries no --reload (the dev compose adds it back for hot reload).
+RUN useradd --create-home --uid 1000 bumblebee \
+    && mkdir -p /home/bumblebee/.bumblebee-gui/scans \
+    && chown -R bumblebee:bumblebee /home/bumblebee/.bumblebee-gui
+ENV BUMBLEBEE_DATA_DIR=/home/bumblebee/.bumblebee-gui
+USER bumblebee
 
 EXPOSE 8000
 
-CMD ["uvicorn", "bumblebee_gui.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "bumblebee_gui.main:app", "--host", "0.0.0.0", "--port", "8000"]
